@@ -30,7 +30,59 @@ from .resources import *
 # Import the code for the dialog
 from .terraqube_cloud_dialog import TerraqubeCloudDialog
 import os.path
+import requests
+import json
 
+class Cloudqube:
+    def __init__(self, server):
+        self.server = server
+        self.token = None
+
+    def get_url(self, url):
+        return "{0}/terraqube/cloudqube/1.0.0/{1}".format(self.server, url)
+     
+    def post(self, url, data={}):
+        url = self.get_url(url)
+        headers = {
+            "accepts": "application/json",
+            "Content-type": "application/json"
+        }
+        if self.token:
+            headers["Authorization"] = "Bearer {0}".format(self.token)
+        return requests.post(
+            url,
+            data=json.dumps(data),
+            headers=headers)
+
+    def get(self, url, data={}):
+        url = self.get_url(url)
+        headers = {
+            "accepts": "application/json",
+            "Content-type": "application/json"
+        }
+        if self.token:
+            headers["Authorization"] = "Bearer {0}".format(self.token)
+        return requests.get(
+            url,
+            params=data,
+            headers=headers)
+
+    def login_user(self, username, password):
+        """Login user to Terraqube Cloud using username and password."""
+        response = self.post("user/login", {"username": username, "password": password})
+        if (response.ok):
+            data = json.loads(response.content)
+            self.token = data['access_token']
+        else:
+            response.raise_for_status()
+            
+    def get_hyperqubes(self):
+        """Get list of hyperqubes for current user."""
+        response = self.get("hiperqubes")
+        if (response.ok):
+            return json.loads(response.content)
+        else:
+            response.raise_for_status()
 
 class TerraqubeCloud:
     """QGIS Plugin Implementation."""
@@ -179,6 +231,20 @@ class TerraqubeCloud:
                 action)
             self.iface.removeToolBarIcon(action)
 
+    def sign_in(self):
+        """Signs in a user to Terraqube Cloud."""
+        server = self.dlg.serverInput.text().strip()
+        username = self.dlg.usernameInput.text().strip()
+        password = self.dlg.passwordInput.text().strip()
+        if (server and username and password):
+            self.cloudqube = Cloudqube(server)
+            try:
+                self.cloudqube.login_user(username, password)
+                self.iface.messageBar().pushSuccess("Success", "Signed in Terraqube Cloud!")
+                hyperqubes = self.cloudqube.get_hyperqubes()
+                self.iface.messageBar().pushSuccess("Success", json.dumps(hyperqubes))
+            except Exception as err:
+                self.iface.messageBar().pushCritical("Failure", "Couldn't sign in to Terraqube Cloud: {0}".format(err))
 
     def run(self):
         """Run method that performs all the real work"""
@@ -188,6 +254,9 @@ class TerraqubeCloud:
         if self.first_start == True:
             self.first_start = False
             self.dlg = TerraqubeCloudDialog()
+            self.dlg.signInButton.clicked.connect(self.sign_in)
+
+        
 
         # show the dialog
         self.dlg.show()

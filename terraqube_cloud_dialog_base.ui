@@ -20,7 +20,7 @@
    <item row="0" column="0">
     <layout class="QGridLayout" name="gridLayout">
      <item row="0" column="0">
-      <widget class="QTabWidget" name="TerraqubeTab">
+      <widget class="QTabWidget" name="terraqubeTab">
        <property name="sizePolicy">
         <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
          <horstretch>0</horstretch>
@@ -196,9 +196,9 @@
             </widget>
            </item>
            <item>
-            <widget class="QLabel" name="label_3">
+            <widget class="QLabel" name="terraqubeBrand">
              <property name="text">
-              <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p align=&quot;center&quot;&gt;Hyperspectral Imaging&lt;/p&gt;&lt;p align=&quot;center&quot;&gt;Terraqube, S.L.&lt;/p&gt;&lt;p align=&quot;center&quot;&gt;&lt;br/&gt;&lt;/p&gt;&lt;p align=&quot;center&quot;&gt;https://www.terraqube.com&lt;/p&gt;&lt;p align=&quot;center&quot;&gt;terraqube@terraqube.com&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+              <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p align=&quot;center&quot;&gt;Hyperspectral Imaging Cloud&lt;/p&gt;&lt;p align=&quot;center&quot;&gt;Terraqube, S.L.&lt;/p&gt;&lt;p align=&quot;center&quot;&gt;&lt;br/&gt;&lt;/p&gt;&lt;p align=&quot;center&quot;&gt;https://www.terraqube.com&lt;/p&gt;&lt;p align=&quot;center&quot;&gt;terraqube@terraqube.com&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
              </property>
              <property name="alignment">
               <set>Qt::AlignCenter</set>
