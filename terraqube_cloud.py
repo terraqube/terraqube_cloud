@@ -23,7 +23,7 @@
 """
 from qgis.PyQt.QtCore import QSettings, QTranslator, QCoreApplication
 from qgis.PyQt.QtGui import QIcon
-from qgis.PyQt.QtWidgets import QAction
+from qgis.PyQt.QtWidgets import QAction, QTableWidgetItem, QHeaderView
 
 # Initialize Qt resources from file resources.py
 from .resources import *
@@ -230,6 +230,17 @@ class TerraqubeCloud:
                 self.tr(u'&Terraqube Hyperspectral Cloud'),
                 action)
             self.iface.removeToolBarIcon(action)
+    
+    def initHyperqubeTable(self, hyperqubes):
+        """Initializes the hyperqube table with the hyperqubes retrieved from the server."""
+        self.dlg.hyperqubeTable.clearContents()
+        self.dlg.hyperqubeTable.setRowCount(len(hyperqubes))
+        i = 0
+        for hyperqube in hyperqubes:
+            self.dlg.hyperqubeTable.setItem(i, 0, QTableWidgetItem(hyperqube['name']))
+            self.dlg.hyperqubeTable.setItem(i, 1, QTableWidgetItem(hyperqube['captureDate']))
+            self.dlg.hyperqubeTable.setItem(i, 2, QTableWidgetItem(hyperqube['uploadDate']))
+            i = i + 1
 
     def sign_in(self):
         """Signs in a user to Terraqube Cloud."""
@@ -242,9 +253,14 @@ class TerraqubeCloud:
                 self.cloudqube.login_user(username, password)
                 self.iface.messageBar().pushSuccess("Success", "Signed in Terraqube Cloud!")
                 hyperqubes = self.cloudqube.get_hyperqubes()
-                self.iface.messageBar().pushSuccess("Success", json.dumps(hyperqubes))
+                self.initHyperqubeTable(hyperqubes)
+                self.dlg.terraqubeTab.setCurrentWidget(self.dlg.hyperqubes)
             except Exception as err:
                 self.iface.messageBar().pushCritical("Failure", "Couldn't sign in to Terraqube Cloud: {0}".format(err))
+
+    def select_hyperqube(self, row, col):
+        """Action to execute when a hyperqube is selected."""
+        self.iface.messageBar().pushSuccess("Success", "Hyperqube clicked: {0} {1}".format(row,col))
 
     def run(self):
         """Run method that performs all the real work"""
@@ -255,6 +271,10 @@ class TerraqubeCloud:
             self.first_start = False
             self.dlg = TerraqubeCloudDialog()
             self.dlg.signInButton.clicked.connect(self.sign_in)
+            self.dlg.hyperqubeTable.setColumnCount(3)
+            self.dlg.hyperqubeTable.setHorizontalHeaderLabels(['Name', 'Capture Date', 'Upload Date'])
+            self.dlg.hyperqubeTable.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+            self.dlg.hyperqubeTable.cellDoubleClicked.connect(self.select_hyperqube)
 
         
 
