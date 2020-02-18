@@ -24,6 +24,7 @@
 from qgis.PyQt.QtCore import QSettings, QTranslator, QCoreApplication
 from qgis.PyQt.QtGui import QIcon
 from qgis.PyQt.QtWidgets import QAction, QTableWidgetItem, QHeaderView
+from qgis.core import QgsMessageLog, Qgis
 
 # Initialize Qt resources from file resources.py
 from .resources import *
@@ -230,6 +231,14 @@ class TerraqubeCloud:
                 self.tr(u'&Terraqube Hyperspectral Cloud'),
                 action)
             self.iface.removeToolBarIcon(action)
+
+    def formatSize(self, size, suffix='B'):
+        """Formats the size of a hyperqube."""
+        for unit in ['','Ki','Mi','Gi','Ti','Pi','Ei','Zi']:
+            if abs(size) < 1024.0:
+                return "%3.1f%s%s" % (size, unit, suffix)
+            size /= 1024.0
+        return "%.1f%s%s" % (size, 'Yi', suffix)
     
     def initHyperqubeTable(self, hyperqubes):
         """Initializes the hyperqube table with the hyperqubes retrieved from the server."""
@@ -240,6 +249,7 @@ class TerraqubeCloud:
             self.dlg.hyperqubeTable.setItem(i, 0, QTableWidgetItem(hyperqube['name']))
             self.dlg.hyperqubeTable.setItem(i, 1, QTableWidgetItem(hyperqube['captureDate']))
             self.dlg.hyperqubeTable.setItem(i, 2, QTableWidgetItem(hyperqube['uploadDate']))
+            self.dlg.hyperqubeTable.setItem(i, 3, QTableWidgetItem(self.formatSize(hyperqube['size'])))
             i = i + 1
 
     def sign_in(self):
@@ -271,8 +281,9 @@ class TerraqubeCloud:
             self.first_start = False
             self.dlg = TerraqubeCloudDialog()
             self.dlg.signInButton.clicked.connect(self.sign_in)
-            self.dlg.hyperqubeTable.setColumnCount(3)
-            self.dlg.hyperqubeTable.setHorizontalHeaderLabels(['Name', 'Capture Date', 'Upload Date'])
+            headers = ['Name', 'Capture Date', 'Upload Date', 'Size']
+            self.dlg.hyperqubeTable.setColumnCount(len(headers))
+            self.dlg.hyperqubeTable.setHorizontalHeaderLabels(headers)
             self.dlg.hyperqubeTable.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
             self.dlg.hyperqubeTable.cellDoubleClicked.connect(self.select_hyperqube)
 
