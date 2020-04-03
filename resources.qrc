@@ -1,6 +1,10 @@
 <RCC>
     <qresource prefix="/plugins/terraqube_cloud" >
-        <file>icon.png</file>
-        <file>logo.png</file>
+        <file>resources/icon.png</file>
+        <file>resources/logo.png</file>
+        <file>resources/folder-plus.svg</file>
+        <file>resources/trash-alt.svg</file>
+        <file>resources/cloud-upload-alt.svg</file>
+        <file>resources/folder.svg</file>
     </qresource>
 </RCC>

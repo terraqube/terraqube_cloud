@@ -21,69 +21,21 @@
  *                                                                         *
  ***************************************************************************/
 """
-from qgis.PyQt.QtCore import QSettings, QTranslator, QCoreApplication
+from .cloudqube_client import CloudqubeClient
+from qgis.PyQt.QtCore import QSettings, QTranslator, QCoreApplication, QDateTime
 from qgis.PyQt.QtGui import QIcon
-from qgis.PyQt.QtWidgets import QAction, QTableWidgetItem, QHeaderView
+from qgis.PyQt.QtWidgets import QAction, QTableWidgetItem, QHeaderView, QPushButton, QDialogButtonBox, QDialog, QApplication
 from qgis.core import QgsMessageLog, Qgis
 
 # Initialize Qt resources from file resources.py
 from .resources import *
 # Import the code for the dialog
 from .terraqube_cloud_dialog import TerraqubeCloudDialog
+from .upload_hiperqube_dialog import UploadHiperqubeDialog
+from .util import get_hdr_filename
+from datetime import datetime, timedelta
 import os.path
-import requests
-import json
 
-class Cloudqube:
-    def __init__(self, server):
-        self.server = server
-        self.token = None
-
-    def get_url(self, url):
-        return "{0}/terraqube/cloudqube/1.0.0/{1}".format(self.server, url)
-     
-    def post(self, url, data={}):
-        url = self.get_url(url)
-        headers = {
-            "accepts": "application/json",
-            "Content-type": "application/json"
-        }
-        if self.token:
-            headers["Authorization"] = "Bearer {0}".format(self.token)
-        return requests.post(
-            url,
-            data=json.dumps(data),
-            headers=headers)
-
-    def get(self, url, data={}):
-        url = self.get_url(url)
-        headers = {
-            "accepts": "application/json",
-            "Content-type": "application/json"
-        }
-        if self.token:
-            headers["Authorization"] = "Bearer {0}".format(self.token)
-        return requests.get(
-            url,
-            params=data,
-            headers=headers)
-
-    def login_user(self, username, password):
-        """Login user to Terraqube Cloud using username and password."""
-        response = self.post("user/login", {"username": username, "password": password})
-        if (response.ok):
-            data = json.loads(response.content)
-            self.token = data['access_token']
-        else:
-            response.raise_for_status()
-            
-    def get_hyperqubes(self):
-        """Get list of hyperqubes for current user."""
-        response = self.get("hiperqubes")
-        if (response.ok):
-            return json.loads(response.content)
-        else:
-            response.raise_for_status()
 
 class TerraqubeCloud:
     """QGIS Plugin Implementation."""
@@ -120,6 +72,10 @@ class TerraqubeCloud:
         # Must be set in initGui() to survive plugin reloads
         self.first_start = None
 
+        self.upload_total_size = None
+        self.upload_current_size = None
+        self.upload_time_started = None
+
     # noinspection PyMethodMayBeStatic
     def tr(self, message):
         """Get the translation for a string using Qt translation API.
@@ -135,18 +91,17 @@ class TerraqubeCloud:
         # noinspection PyTypeChecker,PyArgumentList,PyCallByClass
         return QCoreApplication.translate('TerraqubeCloud', message)
 
-
     def add_action(
-        self,
-        icon_path,
-        text,
-        callback,
-        enabled_flag=True,
-        add_to_menu=True,
-        add_to_toolbar=True,
-        status_tip=None,
-        whats_this=None,
-        parent=None):
+            self,
+            icon_path,
+            text,
+            callback,
+            enabled_flag=True,
+            add_to_menu=True,
+            add_to_toolbar=True,
+            status_tip=None,
+            whats_this=None,
+            parent=None):
         """Add a toolbar icon to the toolbar.
 
         :param icon_path: Path to the icon for this action. Can be a resource
@@ -213,7 +168,7 @@ class TerraqubeCloud:
     def initGui(self):
         """Create the menu entries and toolbar icons inside the QGIS GUI."""
 
-        icon_path = ':/plugins/terraqube_cloud/icon.png'
+        icon_path = ':/plugins/terraqube_cloud/resources/icon.png'
         self.add_action(
             icon_path,
             text=self.tr(u'Terraqube Hyperspectral Cloud'),
@@ -222,7 +177,6 @@ class TerraqubeCloud:
 
         # will be set False in run()
         self.first_start = True
-
 
     def unload(self):
         """Removes the plugin menu item and icon from QGIS GUI."""
@@ -233,44 +187,238 @@ class TerraqubeCloud:
             self.iface.removeToolBarIcon(action)
 
     def formatSize(self, size, suffix='B'):
-        """Formats the size of a hyperqube."""
-        for unit in ['','Ki','Mi','Gi','Ti','Pi','Ei','Zi']:
+        """Formats the size of a hiperqube."""
+        for unit in ['', 'Ki', 'Mi', 'Gi', 'Ti', 'Pi', 'Ei', 'Zi']:
             if abs(size) < 1024.0:
                 return "%3.1f%s%s" % (size, unit, suffix)
             size /= 1024.0
         return "%.1f%s%s" % (size, 'Yi', suffix)
-    
-    def initHyperqubeTable(self, hyperqubes):
-        """Initializes the hyperqube table with the hyperqubes retrieved from the server."""
-        self.dlg.hyperqubeTable.clearContents()
-        self.dlg.hyperqubeTable.setRowCount(len(hyperqubes))
+
+    def fillProjectsCombo(self, projects):
+        """Initializes the project table with the projects retrieved from the server."""
+        self.dlg.projectsComboBox.clear()
+        icon = QIcon(':/plugins/terraqube_cloud/resources/folder.svg')
+        for project in projects:
+            self.dlg.projectsComboBox.addItem(
+                icon, '{0} - {1}'.format(project['name'], project['createdDate']))
+        self.dlg.projectsComboBox.setEnabled(True)
+        self.dlg.addProjectButton.setEnabled(True)
+
+    def getHiperqubeStatus(self, status):
+        """Shows the appropriate string depending on the status."""
+        if status != 'READY':
+            return 'Preparing'
+        else:
+            return 'Ready'
+
+
+    def fillHiperqubeTable(self, hiperqubes):
+        """Initializes the hiperqube table with the hiperqubes retrieved from the server."""
+        self.dlg.hiperqubeTable.clearContents()
+        self.dlg.hiperqubeTable.setRowCount(len(hiperqubes))
         i = 0
-        for hyperqube in hyperqubes:
-            self.dlg.hyperqubeTable.setItem(i, 0, QTableWidgetItem(hyperqube['name']))
-            self.dlg.hyperqubeTable.setItem(i, 1, QTableWidgetItem(hyperqube['captureDate']))
-            self.dlg.hyperqubeTable.setItem(i, 2, QTableWidgetItem(hyperqube['uploadDate']))
-            self.dlg.hyperqubeTable.setItem(i, 3, QTableWidgetItem(self.formatSize(hyperqube['size'])))
+        for hiperqube in hiperqubes:
+            self.dlg.hiperqubeTable.setItem(
+                i, 0, QTableWidgetItem(hiperqube['name']))
+            self.dlg.hiperqubeTable.setItem(
+                i, 1, QTableWidgetItem(hiperqube['capturedDate']))
+            self.dlg.hiperqubeTable.setItem(
+                i, 2, QTableWidgetItem(hiperqube['lastModifiedDate']))
+            self.dlg.hiperqubeTable.setItem(
+                i, 3, QTableWidgetItem(self.formatSize(hiperqube['size'])))
+            self.dlg.hiperqubeTable.setItem(
+                i, 4, QTableWidgetItem(self.getHiperqubeStatus(hiperqube['status'])))
             i = i + 1
+        self.dlg.hiperqubeTable.setEnabled(True)
+        self.dlg.uploadHiperqubeButton.setEnabled(True)
 
     def sign_in(self):
         """Signs in a user to Terraqube Cloud."""
         server = self.dlg.serverInput.text().strip()
         username = self.dlg.usernameInput.text().strip()
         password = self.dlg.passwordInput.text().strip()
-        if (server and username and password):
-            self.cloudqube = Cloudqube(server)
+        if server and username and password:
+            self.cloudqube = CloudqubeClient(server)
             try:
                 self.cloudqube.login_user(username, password)
                 self.iface.messageBar().pushSuccess("Success", "Signed in Terraqube Cloud!")
-                hyperqubes = self.cloudqube.get_hyperqubes()
-                self.initHyperqubeTable(hyperqubes)
-                self.dlg.terraqubeTab.setCurrentWidget(self.dlg.hyperqubes)
+                try:
+                    self.projects = self.cloudqube.get_projects()
+                    self.fillProjectsCombo(self.projects)
+                    self.dlg.terraqubeTab.setCurrentWidget(self.dlg.hiperqubes)
+                except Exception as err:
+                    self.iface.messageBar().pushCritical(
+                        "Failure", "Couldn't retrieve projects: {0}".format(err))
             except Exception as err:
-                self.iface.messageBar().pushCritical("Failure", "Couldn't sign in to Terraqube Cloud: {0}".format(err))
+                self.iface.messageBar().pushCritical(
+                    "Failure", "Couldn't sign in to Terraqube Cloud: {0}".format(err))
 
-    def select_hyperqube(self, row, col):
-        """Action to execute when a hyperqube is selected."""
-        self.iface.messageBar().pushSuccess("Success", "Hyperqube clicked: {0} {1}".format(row,col))
+    def select_hiperqube(self, row, col):
+        """Action to execute when a hiperqube is selected."""
+        self.iface.messageBar().pushSuccess(
+            "Success", "Hiperqube clicked: {0} {1}".format(row, col))
+
+    def select_project(self, index):
+        """Action to execute when a project is selected."""
+        self.project = self.projects[index]
+        self.hiperqubes = self.cloudqube.get_hiperqubes(self.project['id'])
+        self.fillHiperqubeTable(self.hiperqubes)
+
+    def update_hiperqube_upload_progress(self, bytes_transferred=None):
+        # Total Size
+        if self.upload_total_size:
+            self.uh_dlg.totalSizeValueLabel.setText(
+                self.formatSize(self.upload_total_size))
+        else:
+            self.uh_dlg.totalSizeValueLabel.setText('-')
+
+        # Total Transferred
+        progress = None
+        if bytes_transferred:
+            if not self.upload_current_size:
+                self.upload_current_size = 0
+            self.upload_current_size = self.upload_current_size + bytes_transferred
+            self.uh_dlg.totalTransferredValueLabel.setText(
+                self.formatSize(self.upload_current_size))
+            progress = self.upload_current_size / self.upload_total_size
+            self.uh_dlg.transferProgressBar.setValue(progress * 100)
+            self.uh_dlg.transferProgressBar.setEnabled(True)
+        else:
+            if self.upload_current_size:
+                progress = self.upload_current_size / self.upload_total_size
+            else:
+                self.uh_dlg.totalTransferredValueLabel.setText('-')
+            self.uh_dlg.transferProgressBar.setEnabled(False)
+
+        # Total Elapsed
+        if self.upload_time_started:
+            delta = datetime.now().replace(microsecond=0) - self.upload_time_started
+            self.uh_dlg.totalElapsedTimeValueLabel.setText(str(delta))
+            if progress:
+                time_left = timedelta(seconds=int(delta.total_seconds() / progress))
+                self.uh_dlg.estimatedRemainingTimeValueLabel.setText(
+                    str(time_left))
+            else:
+                self.uh_dlg.estimatedRemainingTimeValueLabel.setText(
+                    '-- : -- : --')
+        else:
+            self.uh_dlg.totalElapsedTimeValueLabel.setText('-- : -- : --')
+        QApplication.processEvents()
+
+    def start_hiperqube_upload(self):
+        """Action to execute to start uploading an hiperqube."""
+        try:
+            self.uh_dlg.uploadButton.setEnabled(False)
+            self.uh_dlg.uploadButton.setText('Preparing...')
+            QApplication.processEvents()
+            self.uh_dlg.uploadButton.show()
+            name = self.uh_dlg.hiperqubeNameLineEdit.text()
+            capturedDate = self.uh_dlg.capturedDateDateTimeEdit.dateTime().toPyDateTime()
+            filename = self.uh_dlg.hiperqubeFileWidget.filePath()
+            hiperqube = self.cloudqube.create_hiperqube(
+                self.project['id'], name, capturedDate)
+            self.cloudqube.upload_hiperqube_hdr(
+                hiperqube['id'], get_hdr_filename(filename))
+            self.upload_time_started = datetime.now().replace(microsecond=0)
+            self.uh_dlg.uploadButton.setText('Uploading...')
+            QApplication.processEvents()
+            self.cloudqube.upload_hiperqube_bil(
+                hiperqube['uploadBilUrl'], hiperqube['uploadBilFields'], filename, self.update_hiperqube_upload_progress)
+            self.iface.messageBar().pushSuccess("Success", "Transfer completed!")
+            self.uh_dlg.uploadButton.setText('Done!')
+            QApplication.processEvents()
+            self.uh_dlg.accept()
+        except Exception as err:
+            self.iface.messageBar().pushCritical("Failure", str(err))
+            self.uh_dlg.reject()
+
+    def validate_upload_hiperqube_form(self):
+        """Action to execute to validate whether the upload button should be enabled or not."""
+        if (
+            len(self.uh_dlg.hiperqubeNameLineEdit.text()) > 0 and
+            self.uh_dlg.capturedDateDateTimeEdit.dateTime() and
+            len(self.uh_dlg.hiperqubeFileWidget.filePath()) > 0
+        ):
+            self.uh_dlg.uploadButton.setEnabled(True)
+        else:
+            self.uh_dlg.uploadButton.setEnabled(False)
+
+    def validate_upload_hiperqube_file(self):
+        """Action to execute to validate that the file to upload is valid."""
+        filename = self.uh_dlg.hiperqubeFileWidget.filePath()
+        if len(filename) > 0:
+            if os.path.exists(filename):
+                hdr_filename = get_hdr_filename(filename)
+                if os.path.exists(hdr_filename):
+                    self.upload_total_size = os.path.getsize(filename)
+                else:
+                    self.iface.messageBar().pushCritical(
+                        "Failure", "HDR file {0} missing!".format(hdr_filename))
+                    self.uh_dlg.hiperqubeFileWidget.setFilePath(None)
+            else:
+                self.iface.messageBar().pushCritical("Failure", "File does not exist!")
+                self.uh_dlg.hiperqubeFileWidget.setFilePath(None)
+            self.update_hiperqube_upload_progress()
+        self.validate_upload_hiperqube_form()
+
+    def upload_hiperqube(self):
+        """Action to execute when the upload hiperqube button is triggered."""
+        self.uh_dlg = UploadHiperqubeDialog(self.dlg)
+
+        self.uh_dlg.uploadButton = QPushButton("Upload")
+        self.uh_dlg.uploadButton.setDefault(True)
+        self.uh_dlg.uploadButton.clicked.connect(self.start_hiperqube_upload)
+        self.uh_dlg.uploadButton.setEnabled(False)
+        self.uh_dlg.uploadHiperqubeButtonBox.addButton(
+            self.uh_dlg.uploadButton, QDialogButtonBox.ActionRole)
+
+        self.uh_dlg.capturedDateDateTimeEdit.setMaximumDateTime(
+            QDateTime.currentDateTime())
+        self.uh_dlg.capturedDateDateTimeEdit.setAllowNull(True)
+        self.uh_dlg.capturedDateDateTimeEdit.setEmpty()
+
+        self.uh_dlg.hiperqubeNameLineEdit.editingFinished.connect(
+            self.validate_upload_hiperqube_form)
+        self.uh_dlg.capturedDateDateTimeEdit.valueChanged.connect(
+            self.validate_upload_hiperqube_form)
+        self.uh_dlg.hiperqubeFileWidget.fileChanged.connect(
+            self.validate_upload_hiperqube_file)
+
+        if self.uh_dlg.exec_() == QDialog.Accepted:
+            self.select_project(self.dlg.projectsComboBox.currentIndex())
+
+        self.upload_total_size = None
+        self.upload_current_size = None
+        self.upload_time_started = None
+
+    def initAccountTab(self):
+        """Initializes the Account tab."""
+        self.dlg.signInButton.clicked.connect(self.sign_in)
+
+    def initProjectsGroupBox(self):
+        """Initializes the Projects GroupBox."""
+        self.dlg.projectsComboBox.currentIndexChanged.connect(
+            self.select_project)
+
+    def initHiperqubesGroupBox(self):
+        """Initializes the Hiperqubes GroupBox."""
+        headers = ['Name', 'Capture Date', 'Last Modified Date', 'Size', 'Status']
+        self.dlg.hiperqubeTable.setColumnCount(len(headers))
+        self.dlg.hiperqubeTable.setHorizontalHeaderLabels(headers)
+        self.dlg.hiperqubeTable.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        self.dlg.hiperqubeTable.cellDoubleClicked.connect(
+            self.select_hiperqube)
+        self.dlg.uploadHiperqubeButton.clicked.connect(self.upload_hiperqube)
+
+    def initHiperqubeDetailsGroupBox(self):
+        """Initializes the Hiperqube Details GroupBox."""
+        pass
+
+    def initHiperqubesTab(self):
+        """Initializes the Hiperqubes tab."""
+        self.initProjectsGroupBox()
+        self.initHiperqubesGroupBox()
+        self.initHiperqubeDetailsGroupBox()
 
     def run(self):
         """Run method that performs all the real work"""
@@ -280,14 +428,9 @@ class TerraqubeCloud:
         if self.first_start == True:
             self.first_start = False
             self.dlg = TerraqubeCloudDialog()
-            self.dlg.signInButton.clicked.connect(self.sign_in)
-            headers = ['Name', 'Capture Date', 'Upload Date', 'Size']
-            self.dlg.hyperqubeTable.setColumnCount(len(headers))
-            self.dlg.hyperqubeTable.setHorizontalHeaderLabels(headers)
-            self.dlg.hyperqubeTable.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
-            self.dlg.hyperqubeTable.cellDoubleClicked.connect(self.select_hyperqube)
-
-        
+            self.initAccountTab()
+            self.initHiperqubesTab()
+            self.dlg.terraqubeTab.setCurrentIndex(0)
 
         # show the dialog
         self.dlg.show()
