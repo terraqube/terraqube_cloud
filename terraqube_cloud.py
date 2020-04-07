@@ -28,7 +28,7 @@ from qgis.PyQt.QtCore import QSettings, QTranslator, QCoreApplication, QDateTime
 from qgis.PyQt.QtGui import QIcon, QPixmap, QImage, QPainter, QColor
 from qgis.PyQt.QtWidgets import QAction, QTableWidgetItem, QHeaderView, QPushButton, QDialogButtonBox, QDialog, QApplication
 from qgis.PyQt.QtSvg import QSvgRenderer
-from qgis.core import QgsMessageLog, Qgis
+from qgis.core import QgsMessageLog, Qgis, QgsRasterLayer
 
 # Initialize Qt resources from file resources.py
 from .resources import *
@@ -97,6 +97,7 @@ class TerraqubeCloud:
         self.upload_total_size = None
         self.upload_current_size = None
         self.upload_time_started = None
+        self.last_hiperqube_row = None
 
     # noinspection PyMethodMayBeStatic
     def tr(self, message):
@@ -261,6 +262,9 @@ class TerraqubeCloud:
 
     def sign_in(self):
         """Signs in a user to Terraqube Cloud."""
+        self.dlg.signInButton.setEnabled(False)
+        self.dlg.signInButton.setText('Signing In...')
+        QApplication.processEvents()
         server = self.dlg.serverInput.text().strip()
         username = self.dlg.usernameInput.text().strip()
         password = self.dlg.passwordInput.text().strip()
@@ -279,32 +283,51 @@ class TerraqubeCloud:
             except Exception as err:
                 self.iface.messageBar().pushCritical(
                     "Failure", "Couldn't sign in to Terraqube Cloud: {0}".format(err))
+        self.dlg.signInButton.setText('Sign In')
+        self.dlg.signInButton.setEnabled(True)
+
+    def show_hiperqube(self, row, col):
+        """Renders the selected hiperqube in a new raster layer."""
+        self.hiperqube = self.hiperqubes[row]
+        if not self.hiperqube_details or self.hiperqube_details['id'] != self.hiperqube['id']:
+            self.hiperqube_details = self.cloudqube.get_hiperqube_details(
+                self.hiperqube['id'])
+        filename = self.cloudqube.download_file(self.hiperqube_details['imageUrl'])
+        if filename:
+            name = '{0} / {1}'.format(self.project['name'], self.hiperqube['name'])
+            self.iface.addRasterLayer(filename, name)
+        else:
+            self.iface.messageBar().pushCritical(
+                "Failure", "Couldn't download hiperqube raster.")
+
 
     def select_hiperqube(self, row, col):
         """Action to execute when a hiperqube is selected."""
-        self.hiperqube = self.hiperqubes[row]
-        self.hiperqube_details = self.cloudqube.get_hiperqube_details(
-            self.hiperqube['id'])
-        self.dlg.columnsValueLabel.setText(str(self.hiperqube_details['cols']))
-        self.dlg.bandsValueLabel.setText(str(self.hiperqube_details['bands']))
-        self.dlg.linesValueLabel.setText(str(self.hiperqube_details['lines']))
-        min_value, max_value, avg_dist = get_wavelength_stats(
-            array_str_to_float(self.hiperqube_details['wavelength']))
-        self.dlg.minWavelengthValueLabel.setText('{:.2f} nm'.format(min_value))
-        self.dlg.maxWavelengthValueLabel.setText('{:.2f} nm'.format(max_value))
-        self.dlg.avgWavelengthDistValueLabel.setText('{:.2f} nm'.format(avg_dist))
+        if self.last_hiperqube_row != row:
+            self.hiperqube = self.hiperqubes[row]
+            self.hiperqube_details = self.cloudqube.get_hiperqube_details(
+                self.hiperqube['id'])
+            self.dlg.columnsValueLabel.setText(str(self.hiperqube_details['cols']))
+            self.dlg.bandsValueLabel.setText(str(self.hiperqube_details['bands']))
+            self.dlg.linesValueLabel.setText(str(self.hiperqube_details['lines']))
+            min_value, max_value, avg_dist = get_wavelength_stats(
+                array_str_to_float(self.hiperqube_details['wavelength']))
+            self.dlg.minWavelengthValueLabel.setText('{:.2f} nm'.format(min_value))
+            self.dlg.maxWavelengthValueLabel.setText('{:.2f} nm'.format(max_value))
+            self.dlg.avgWavelengthDistValueLabel.setText('{:.2f} nm'.format(avg_dist))
+            self.last_hiperqube_row = row
 
-        try:    
-            filename = self.cloudqube.download_file(self.hiperqube_details['thumbnailUrl'])
-            if filename:
-                pixmap = QPixmap(filename).scaled(THUMB_WIDTH, THUMB_HEIGHT, Qt.KeepAspectRatio, Qt.SmoothTransformation)
-                self.dlg.thumbnailLabel.setPixmap(pixmap)
-            else:
-                pixmap = get_colored_pixmap(THUMB_MISSING_RESOURCE, ICON_COLOR, THUMB_SIZE)
-                self.dlg.thumbnailLabel.setPixmap(pixmap)
-        except Exception as err:
-                self.iface.messageBar().pushCritical(
-                    "Failure", "Couldn't sign in to Terraqube Cloud: {0}".format(err))
+            try:
+                filename = self.cloudqube.download_file(self.hiperqube_details['thumbnailUrl'])
+                if filename:
+                    pixmap = QPixmap(filename).scaled(THUMB_WIDTH, THUMB_HEIGHT, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+                    self.dlg.thumbnailLabel.setPixmap(pixmap)
+                else:
+                    pixmap = get_colored_pixmap(THUMB_MISSING_RESOURCE, ICON_COLOR, THUMB_SIZE)
+                    self.dlg.thumbnailLabel.setPixmap(pixmap)
+            except Exception as err:
+                    self.iface.messageBar().pushCritical(
+                        "Failure", "Couldn't download hiperqube thumbnail.")
 
     def select_project(self, index):
         """Action to execute when a project is selected."""
@@ -458,6 +481,8 @@ class TerraqubeCloud:
         self.dlg.hiperqubeTable.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         self.dlg.hiperqubeTable.cellClicked.connect(
             self.select_hiperqube)
+        self.dlg.hiperqubeTable.cellDoubleClicked.connect(
+            self.show_hiperqube)
         self.dlg.uploadHiperqubeButton.clicked.connect(self.upload_hiperqube)
 
     def initHiperqubeDetailsGroupBox(self):

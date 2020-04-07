@@ -131,7 +131,7 @@ class CloudqubeClient:
                 extension = '.{0}'.format(response.headers['content-type'].split('/')[1])
             except:
                 extension = ''
-            _, filename = tempfile.mkstemp()
+            _, filename = tempfile.mkstemp(suffix=extension)
             with open(filename, 'wb') as f:
                 f.write(response.content)
         else:
