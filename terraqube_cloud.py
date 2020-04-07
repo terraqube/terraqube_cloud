@@ -21,10 +21,13 @@
  *                                                                         *
  ***************************************************************************/
 """
+import os.path
+
 from .cloudqube_client import CloudqubeClient
-from qgis.PyQt.QtCore import QSettings, QTranslator, QCoreApplication, QDateTime
-from qgis.PyQt.QtGui import QIcon
+from qgis.PyQt.QtCore import QSettings, QTranslator, QCoreApplication, QDateTime, Qt, QSize
+from qgis.PyQt.QtGui import QIcon, QPixmap, QImage, QPainter, QColor
 from qgis.PyQt.QtWidgets import QAction, QTableWidgetItem, QHeaderView, QPushButton, QDialogButtonBox, QDialog, QApplication
+from qgis.PyQt.QtSvg import QSvgRenderer
 from qgis.core import QgsMessageLog, Qgis
 
 # Initialize Qt resources from file resources.py
@@ -32,10 +35,29 @@ from .resources import *
 # Import the code for the dialog
 from .terraqube_cloud_dialog import TerraqubeCloudDialog
 from .upload_hiperqube_dialog import UploadHiperqubeDialog
-from .util import get_hdr_filename
+from .util import get_hdr_filename, get_wavelength_stats, array_str_to_float
 from datetime import datetime, timedelta
-import os.path
 
+
+THUMB_WIDTH = 256
+THUMB_HEIGHT = 256  
+THUMB_MISSING_RESOURCE = ':/plugins/terraqube_cloud/resources/exclamation-triangle.svg'
+THUMB_SIZE = QSize(THUMB_WIDTH, THUMB_HEIGHT)
+ICON_COLOR = QColor('lightGray')
+
+def get_colored_pixmap(filename, color, size):
+    """Returns a colored pixmap of given size."""
+    pixmap = QPixmap(filename).scaled(size, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+    image = QImage(pixmap.width(), pixmap.height(), QImage.Format_ARGB32_Premultiplied)
+
+    image.fill(color)
+    
+    painter = QPainter(image)
+    painter.setCompositionMode(QPainter.CompositionMode_DestinationIn)
+    painter.drawPixmap(0, 0, pixmap)
+    painter.end()
+
+    return QPixmap.fromImage(image)
 
 class TerraqubeCloud:
     """QGIS Plugin Implementation."""
@@ -211,10 +233,15 @@ class TerraqubeCloud:
         else:
             return 'Ready'
 
-
     def fillHiperqubeTable(self, hiperqubes):
         """Initializes the hiperqube table with the hiperqubes retrieved from the server."""
         self.dlg.hiperqubeTable.clearContents()
+        self.dlg.columnsValueLabel.setText('-')
+        self.dlg.bandsValueLabel.setText('-')
+        self.dlg.linesValueLabel.setText('-')
+        self.dlg.minWavelengthValueLabel.setText('-')
+        self.dlg.maxWavelengthValueLabel.setText('-')
+        self.dlg.avgWavelengthDistValueLabel.setText('-')
         self.dlg.hiperqubeTable.setRowCount(len(hiperqubes))
         i = 0
         for hiperqube in hiperqubes:
@@ -255,8 +282,29 @@ class TerraqubeCloud:
 
     def select_hiperqube(self, row, col):
         """Action to execute when a hiperqube is selected."""
-        self.iface.messageBar().pushSuccess(
-            "Success", "Hiperqube clicked: {0} {1}".format(row, col))
+        self.hiperqube = self.hiperqubes[row]
+        self.hiperqube_details = self.cloudqube.get_hiperqube_details(
+            self.hiperqube['id'])
+        self.dlg.columnsValueLabel.setText(str(self.hiperqube_details['cols']))
+        self.dlg.bandsValueLabel.setText(str(self.hiperqube_details['bands']))
+        self.dlg.linesValueLabel.setText(str(self.hiperqube_details['lines']))
+        min_value, max_value, avg_dist = get_wavelength_stats(
+            array_str_to_float(self.hiperqube_details['wavelength']))
+        self.dlg.minWavelengthValueLabel.setText('{:.2f} nm'.format(min_value))
+        self.dlg.maxWavelengthValueLabel.setText('{:.2f} nm'.format(max_value))
+        self.dlg.avgWavelengthDistValueLabel.setText('{:.2f} nm'.format(avg_dist))
+
+        try:    
+            filename = self.cloudqube.download_file(self.hiperqube_details['thumbnailUrl'])
+            if filename:
+                pixmap = QPixmap(filename).scaled(THUMB_WIDTH, THUMB_HEIGHT, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+                self.dlg.thumbnailLabel.setPixmap(pixmap)
+            else:
+                pixmap = get_colored_pixmap(THUMB_MISSING_RESOURCE, ICON_COLOR, THUMB_SIZE)
+                self.dlg.thumbnailLabel.setPixmap(pixmap)
+        except Exception as err:
+                self.iface.messageBar().pushCritical(
+                    "Failure", "Couldn't sign in to Terraqube Cloud: {0}".format(err))
 
     def select_project(self, index):
         """Action to execute when a project is selected."""
@@ -295,7 +343,8 @@ class TerraqubeCloud:
             delta = datetime.now().replace(microsecond=0) - self.upload_time_started
             self.uh_dlg.totalElapsedTimeValueLabel.setText(str(delta))
             if progress:
-                time_left = timedelta(seconds=int(delta.total_seconds() / progress))
+                time_left = timedelta(seconds=int(
+                    delta.total_seconds() / progress))
                 self.uh_dlg.estimatedRemainingTimeValueLabel.setText(
                     str(time_left))
             else:
@@ -402,17 +451,19 @@ class TerraqubeCloud:
 
     def initHiperqubesGroupBox(self):
         """Initializes the Hiperqubes GroupBox."""
-        headers = ['Name', 'Capture Date', 'Last Modified Date', 'Size', 'Status']
+        headers = ['Name', 'Capture Date',
+                   'Last Modified Date', 'Size', 'Status']
         self.dlg.hiperqubeTable.setColumnCount(len(headers))
         self.dlg.hiperqubeTable.setHorizontalHeaderLabels(headers)
         self.dlg.hiperqubeTable.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
-        self.dlg.hiperqubeTable.cellDoubleClicked.connect(
+        self.dlg.hiperqubeTable.cellClicked.connect(
             self.select_hiperqube)
         self.dlg.uploadHiperqubeButton.clicked.connect(self.upload_hiperqube)
 
     def initHiperqubeDetailsGroupBox(self):
         """Initializes the Hiperqube Details GroupBox."""
-        pass
+        pixmap = get_colored_pixmap(THUMB_MISSING_RESOURCE, ICON_COLOR, THUMB_SIZE)
+        self.dlg.thumbnailLabel.setPixmap(pixmap)
 
     def initHiperqubesTab(self):
         """Initializes the Hiperqubes tab."""

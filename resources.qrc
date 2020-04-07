@@ -6,5 +6,6 @@
         <file>resources/trash-alt.svg</file>
         <file>resources/cloud-upload-alt.svg</file>
         <file>resources/folder.svg</file>
+        <file>resources/exclamation-triangle.svg</file>
     </qresource>
 </RCC>

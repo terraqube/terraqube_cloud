@@ -3,12 +3,13 @@ import json
 import os.path
 import pytz.reference
 import requests
+import tempfile
 import time
 
 from qgis.core import QgsMessageLog, Qgis
 from .requests_toolbelt import MultipartEncoder
 
-UPLOAD_CHUNK_SIZE = 512 * 1024
+UPLOAD_CHUNK_SIZE = 128 * 1024
 
 
 class CloudqubeClient:
@@ -73,6 +74,14 @@ class CloudqubeClient:
         else:
             response.raise_for_status()
 
+    def get_hiperqube_details(self, hiperqube_id):
+        """Get hiperqube details."""
+        response = self.get("hiperqubes/{0}".format(hiperqube_id))
+        if response.ok:
+            return response.json()
+        else:
+            response.raise_for_status()
+
     def create_hiperqube(self, project_id, name, captured_date):
         """Create a new hiperqube."""
         captured_date = captured_date.replace(microsecond=0).replace(
@@ -112,6 +121,25 @@ class CloudqubeClient:
 #                    response = self.post(url, data=self.upload_gen(src, dst, callback), content_type='application/octet-stream')
         if not response.ok:
             response.raise_for_status()
+
+    def download_file(self, uri):
+        """Downloads the file in the uri in a temporary file and returns its name."""
+        filename = None
+        response = requests.get(uri)
+        if response.ok:
+            try:
+                extension = '.{0}'.format(response.headers['content-type'].split('/')[1])
+            except:
+                extension = ''
+            _, filename = tempfile.mkstemp()
+            with open(filename, 'wb') as f:
+                f.write(response.content)
+        else:
+            response.raise_for_status()
+        return filename
+            
+            
+
 
 class ProgressFileWrapper(object):
     def __init__(self, file, callback):
