@@ -32,6 +32,15 @@ def calculate_average_dist(wavelengths):
         return None
 
 
+def format_size(size, suffix='B'):
+    """Formats the size of a hiperqube."""
+    for unit in ['', 'Ki', 'Mi', 'Gi', 'Ti', 'Pi', 'Ei', 'Zi']:
+        if abs(size) < 1024.0:
+            return "%3.1f%s%s" % (size, unit, suffix)
+        size /= 1024.0
+    return "%.1f%s%s" % (size, 'Yi', suffix)
+
+
 def get_wavelength_stats(wavelengths):
     """Gets the lowest wavelength value."""
     min_value = None

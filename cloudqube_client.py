@@ -122,6 +122,22 @@ class CloudqubeClient:
         if not response.ok:
             response.raise_for_status()
 
+    def create_signature(self, hiperqube_id, row, col):
+        """Creates a new signature of the given row and col."""
+        response = self.post("hiperqubes/{0}/signatures?line={1}&col={2}".format(hiperqube_id, row, col))
+        if response.ok:
+            return response.json()
+        else:
+            response.raise_for_status()
+
+    def get_signatures(self, hiperqube_id):
+        """Gets all signatures from a hiperqube."""
+        response = self.get("hiperqubes/{0}/signatures".format(hiperqube_id))
+        if response.ok:
+            return response.json()
+        else:
+            response.raise_for_status()
+
     def download_file(self, uri):
         """Downloads the file in the uri in a temporary file and returns its name."""
         filename = None

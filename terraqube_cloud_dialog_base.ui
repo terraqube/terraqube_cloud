@@ -129,6 +129,9 @@
                </item>
                <item>
                 <widget class="QPushButton" name="signInButton">
+                 <property name="toolTip">
+                  <string>Sign in to Terraqube Cloud server</string>
+                 </property>
                  <property name="text">
                   <string>Sign In</string>
                  </property>
@@ -255,7 +258,7 @@
                <string/>
               </property>
               <property name="pixmap">
-               <pixmap resource="resources.qrc">:/plugins/terraqube_cloud/resources/exclamation-triangle.svg</pixmap>
+               <pixmap resource="resources.qrc">:/plugins/terraqube_cloud/resources/image.svg</pixmap>
               </property>
               <property name="scaledContents">
                <bool>false</bool>
@@ -446,6 +449,91 @@
               </item>
              </layout>
             </item>
+            <item>
+             <widget class="QGroupBox" name="signaturesGroupBox">
+              <property name="title">
+               <string/>
+              </property>
+              <layout class="QHBoxLayout" name="horizontalLayout">
+               <item>
+                <widget class="QTableWidget" name="signaturesTable">
+                 <property name="enabled">
+                  <bool>false</bool>
+                 </property>
+                 <property name="sizePolicy">
+                  <sizepolicy hsizetype="Expanding" vsizetype="Minimum">
+                   <horstretch>0</horstretch>
+                   <verstretch>0</verstretch>
+                  </sizepolicy>
+                 </property>
+                 <property name="minimumSize">
+                  <size>
+                   <width>100</width>
+                   <height>250</height>
+                  </size>
+                 </property>
+                 <property name="editTriggers">
+                  <set>QAbstractItemView::NoEditTriggers</set>
+                 </property>
+                 <property name="selectionMode">
+                  <enum>QAbstractItemView::SingleSelection</enum>
+                 </property>
+                 <property name="selectionBehavior">
+                  <enum>QAbstractItemView::SelectRows</enum>
+                 </property>
+                 <attribute name="horizontalHeaderStretchLastSection">
+                  <bool>true</bool>
+                 </attribute>
+                </widget>
+               </item>
+               <item>
+                <layout class="QVBoxLayout" name="verticalLayout_2">
+                 <item>
+                  <widget class="QToolButton" name="createSignatureButton">
+                   <property name="enabled">
+                    <bool>false</bool>
+                   </property>
+                   <property name="text">
+                    <string>...</string>
+                   </property>
+                   <property name="icon">
+                    <iconset resource="resources.qrc">
+                     <normaloff>:/plugins/terraqube_cloud/resources/crosshairs.svg</normaloff>:/plugins/terraqube_cloud/resources/crosshairs.svg</iconset>
+                   </property>
+                  </widget>
+                 </item>
+                 <item>
+                  <widget class="QToolButton" name="deleteSignatureButton">
+                   <property name="enabled">
+                    <bool>false</bool>
+                   </property>
+                   <property name="text">
+                    <string>...</string>
+                   </property>
+                   <property name="icon">
+                    <iconset resource="resources.qrc">
+                     <normaloff>:/plugins/terraqube_cloud/resources/trash-alt.svg</normaloff>:/plugins/terraqube_cloud/resources/trash-alt.svg</iconset>
+                   </property>
+                  </widget>
+                 </item>
+                 <item>
+                  <spacer name="verticalSpacer_3">
+                   <property name="orientation">
+                    <enum>Qt::Vertical</enum>
+                   </property>
+                   <property name="sizeHint" stdset="0">
+                    <size>
+                     <width>20</width>
+                     <height>40</height>
+                    </size>
+                   </property>
+                  </spacer>
+                 </item>
+                </layout>
+               </item>
+              </layout>
+             </widget>
+            </item>
            </layout>
           </widget>
          </item>
@@ -475,6 +563,9 @@
                 <property name="enabled">
                  <bool>false</bool>
                 </property>
+                <property name="toolTip">
+                 <string>Create a new project</string>
+                </property>
                 <property name="text">
                  <string>...</string>
                 </property>
@@ -491,6 +582,9 @@
                <widget class="QToolButton" name="deleteProjectButton">
                 <property name="enabled">
                  <bool>false</bool>
+                </property>
+                <property name="toolTip">
+                 <string>Permanently delete project</string>
                 </property>
                 <property name="text">
                  <string>...</string>
@@ -525,7 +619,7 @@
                  <set>QAbstractItemView::NoEditTriggers</set>
                 </property>
                 <property name="selectionMode">
-                 <enum>QAbstractItemView::ExtendedSelection</enum>
+                 <enum>QAbstractItemView::SingleSelection</enum>
                 </property>
                 <property name="selectionBehavior">
                  <enum>QAbstractItemView::SelectRows</enum>
@@ -542,6 +636,9 @@
                   <property name="enabled">
                    <bool>false</bool>
                   </property>
+                  <property name="toolTip">
+                   <string>Upload a new hiperqube</string>
+                  </property>
                   <property name="text">
                    <string>...</string>
                   </property>
@@ -552,9 +649,63 @@
                  </widget>
                 </item>
                 <item>
+                 <widget class="QToolButton" name="refreshHiperqubesButton">
+                  <property name="enabled">
+                   <bool>false</bool>
+                  </property>
+                  <property name="toolTip">
+                   <string>Refresh hiperqube list</string>
+                  </property>
+                  <property name="text">
+                   <string>...</string>
+                  </property>
+                  <property name="icon">
+                   <iconset resource="resources.qrc">
+                    <normaloff>:/plugins/terraqube_cloud/resources/sync-alt.svg</normaloff>:/plugins/terraqube_cloud/resources/sync-alt.svg</iconset>
+                  </property>
+                 </widget>
+                </item>
+                <item>
+                 <widget class="QToolButton" name="showHiperqubeButton">
+                  <property name="enabled">
+                   <bool>false</bool>
+                  </property>
+                  <property name="toolTip">
+                   <string>Show raster in map canvas</string>
+                  </property>
+                  <property name="text">
+                   <string>...</string>
+                  </property>
+                  <property name="icon">
+                   <iconset resource="resources.qrc">
+                    <normaloff>:/plugins/terraqube_cloud/resources/image.svg</normaloff>:/plugins/terraqube_cloud/resources/image.svg</iconset>
+                  </property>
+                 </widget>
+                </item>
+                <item>
+                 <widget class="QToolButton" name="signatureButton">
+                  <property name="enabled">
+                   <bool>false</bool>
+                  </property>
+                  <property name="toolTip">
+                   <string>Create hyperspectral signature</string>
+                  </property>
+                  <property name="text">
+                   <string>...</string>
+                  </property>
+                  <property name="icon">
+                   <iconset resource="resources.qrc">
+                    <normaloff>:/plugins/terraqube_cloud/resources/chart-area.svg</normaloff>:/plugins/terraqube_cloud/resources/chart-area.svg</iconset>
+                  </property>
+                 </widget>
+                </item>
+                <item>
                  <widget class="QToolButton" name="deleteHiperqubeButton">
                   <property name="enabled">
                    <bool>false</bool>
+                  </property>
+                  <property name="toolTip">
+                   <string>Permanently delete hiperqube</string>
                   </property>
                   <property name="text">
                    <string>...</string>
