@@ -6,15 +6,15 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>1307</width>
-    <height>743</height>
+    <width>1301</width>
+    <height>727</height>
    </rect>
   </property>
   <property name="windowTitle">
    <string>Terraqube Hyperspectral Cloud</string>
   </property>
   <property name="windowIcon">
-   <iconset resource="resources.qrc">
+   <iconset>
     <normaloff>:/plugins/terraqube_cloud/resources/icon.png</normaloff>:/plugins/terraqube_cloud/resources/icon.png</iconset>
   </property>
   <property name="sizeGripEnabled">
@@ -195,7 +195,7 @@
               <string/>
              </property>
              <property name="pixmap">
-              <pixmap resource="resources.qrc">:/plugins/terraqube_cloud/resources/logo.png</pixmap>
+              <pixmap>:/plugins/terraqube_cloud/resources/logo.png</pixmap>
              </property>
              <property name="alignment">
               <set>Qt::AlignCenter</set>
@@ -258,7 +258,7 @@
                <string/>
               </property>
               <property name="pixmap">
-               <pixmap resource="resources.qrc">:/plugins/terraqube_cloud/resources/image.svg</pixmap>
+               <pixmap>:/plugins/terraqube_cloud/resources/image.svg</pixmap>
               </property>
               <property name="scaledContents">
                <bool>false</bool>
@@ -497,7 +497,7 @@
                     <string>...</string>
                    </property>
                    <property name="icon">
-                    <iconset resource="resources.qrc">
+                    <iconset>
                      <normaloff>:/plugins/terraqube_cloud/resources/crosshairs.svg</normaloff>:/plugins/terraqube_cloud/resources/crosshairs.svg</iconset>
                    </property>
                   </widget>
@@ -511,7 +511,7 @@
                     <string>...</string>
                    </property>
                    <property name="icon">
-                    <iconset resource="resources.qrc">
+                    <iconset>
                      <normaloff>:/plugins/terraqube_cloud/resources/trash-alt.svg</normaloff>:/plugins/terraqube_cloud/resources/trash-alt.svg</iconset>
                    </property>
                   </widget>
@@ -570,11 +570,22 @@
                  <string>...</string>
                 </property>
                 <property name="icon">
-                 <iconset resource="resources.qrc">
+                 <iconset>
                   <normaloff>:/plugins/terraqube_cloud/resources/folder-plus.svg</normaloff>:/plugins/terraqube_cloud/resources/folder-plus.svg</iconset>
                 </property>
                 <property name="toolButtonStyle">
                  <enum>Qt::ToolButtonIconOnly</enum>
+                </property>
+               </widget>
+              </item>
+              <item>
+               <widget class="QToolButton" name="refreshProjectsButton">
+                <property name="text">
+                 <string>...</string>
+                </property>
+                <property name="icon">
+                 <iconset>
+                  <normaloff>:/plugins/terraqube_cloud/resources/sync-alt.svg</normaloff>:/plugins/terraqube_cloud/resources/sync-alt.svg</iconset>
                 </property>
                </widget>
               </item>
@@ -590,7 +601,7 @@
                  <string>...</string>
                 </property>
                 <property name="icon">
-                 <iconset resource="resources.qrc">
+                 <iconset>
                   <normaloff>:/plugins/terraqube_cloud/resources/trash-alt.svg</normaloff>:/plugins/terraqube_cloud/resources/trash-alt.svg</iconset>
                 </property>
                </widget>
@@ -605,7 +616,7 @@
              </property>
              <layout class="QHBoxLayout" name="horizontalLayout_4">
               <item>
-               <widget class="QTableWidget" name="hiperqubeTable">
+               <widget class="QTableWidget" name="hiperqubesTable">
                 <property name="enabled">
                  <bool>false</bool>
                 </property>
@@ -643,7 +654,7 @@
                    <string>...</string>
                   </property>
                   <property name="icon">
-                   <iconset resource="resources.qrc">
+                   <iconset>
                     <normaloff>:/plugins/terraqube_cloud/resources/cloud-upload-alt.svg</normaloff>:/plugins/terraqube_cloud/resources/cloud-upload-alt.svg</iconset>
                   </property>
                  </widget>
@@ -660,7 +671,7 @@
                    <string>...</string>
                   </property>
                   <property name="icon">
-                   <iconset resource="resources.qrc">
+                   <iconset>
                     <normaloff>:/plugins/terraqube_cloud/resources/sync-alt.svg</normaloff>:/plugins/terraqube_cloud/resources/sync-alt.svg</iconset>
                   </property>
                  </widget>
@@ -677,25 +688,8 @@
                    <string>...</string>
                   </property>
                   <property name="icon">
-                   <iconset resource="resources.qrc">
+                   <iconset>
                     <normaloff>:/plugins/terraqube_cloud/resources/image.svg</normaloff>:/plugins/terraqube_cloud/resources/image.svg</iconset>
-                  </property>
-                 </widget>
-                </item>
-                <item>
-                 <widget class="QToolButton" name="signatureButton">
-                  <property name="enabled">
-                   <bool>false</bool>
-                  </property>
-                  <property name="toolTip">
-                   <string>Create hyperspectral signature</string>
-                  </property>
-                  <property name="text">
-                   <string>...</string>
-                  </property>
-                  <property name="icon">
-                   <iconset resource="resources.qrc">
-                    <normaloff>:/plugins/terraqube_cloud/resources/chart-area.svg</normaloff>:/plugins/terraqube_cloud/resources/chart-area.svg</iconset>
                   </property>
                  </widget>
                 </item>
@@ -711,7 +705,7 @@
                    <string>...</string>
                   </property>
                   <property name="icon">
-                   <iconset resource="resources.qrc">
+                   <iconset>
                     <normaloff>:/plugins/terraqube_cloud/resources/trash-alt.svg</normaloff>:/plugins/terraqube_cloud/resources/trash-alt.svg</iconset>
                   </property>
                  </widget>
