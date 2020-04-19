@@ -42,7 +42,10 @@ class HiperqubeRasterLayer(QgsRasterLayer):
                 m.hide()
                 i.hide()
 
-        self._terraqube_cloud.download_file(signature['url'], signature_downloaded, error)
+        self._terraqube_cloud.download_file(
+            signature['url'],
+            signature_downloaded,
+            error)
 
     def remove_signature(self, signature):
         self._signatures.remove(signature)
@@ -59,7 +62,12 @@ class HiperqubeRasterLayer(QgsRasterLayer):
         s = self.find_signature(signature['id'])
         if s:
             for m in s[MARKERS_KEY]:
-                m.setVisibility(visibility)
+                # Can't use setVisibility given that QgsVertexMarker
+                # do not have that method
+                if visibility:
+                    m.show()
+                else:
+                    m.hide()
         else:
             self.add_signature(signature, error, visibility)
     

@@ -38,10 +38,12 @@ class CloudqubeFileReply:
             self._file.write(self._reply.readAll())
             self._file.close()
             self._callback(self._filename)
-            # Call finished callback to remove this reply
-            # which will remove all handling objects
-            # and close all streams
-            self._finished(self)
+        else:
+            self._file.close()
+        # Call finished callback to remove this reply
+        # which will remove all handling objects
+        # and close all streams
+        self._finished(self)
 
     def filename(self):
         """Returns the name of the file that was downloaded."""

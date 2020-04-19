@@ -25,11 +25,14 @@ import os
 import traceback
 
 from .api.cloudqube_client import CloudqubeClient
-from qgis.PyQt.QtCore import QSettings, QTranslator, QCoreApplication, QDateTime, Qt, QSize
+from qgis.PyQt.QtCore import (
+    QSettings, QTranslator, QCoreApplication, QDateTime, Qt, QSize)
 from qgis.PyQt.QtGui import QIcon, QPixmap, QImage, QPainter, QColor
-from qgis.PyQt.QtWidgets import QAction, QTableWidgetItem, QHeaderView, QPushButton, QDialogButtonBox, QDialog, QApplication
+from qgis.PyQt.QtWidgets import (
+    QAction, QTableWidgetItem, QHeaderView, QPushButton, QDialogButtonBox,
+    QDialog, QApplication, QMessageBox, QInputDialog, QLineEdit)
 from qgis.PyQt.QtSvg import QSvgRenderer
-from qgis.core import QgsMessageLog, Qgis, QgsPointXY, QgsProject
+from qgis.core import QgsPointXY, QgsProject
 from qgis.gui import QgsVertexMarker
 
 # Initialize Qt resources from file resources.py
@@ -40,7 +43,8 @@ from .gui.signature_table_widget_item import SignatureTableWidgetItem
 from .gui.signature_tool import SignatureTool
 from .terraqube_cloud_dialog import TerraqubeCloudDialog
 from .upload_hiperqube_dialog import UploadHiperqubeDialog
-from .util import get_hdr_filename, get_wavelength_stats, array_str_to_float, format_size
+from .util import (
+    get_hdr_filename, get_wavelength_stats, array_str_to_float, format_size)
 from datetime import datetime, timedelta
 
 
@@ -116,10 +120,17 @@ class TerraqubeCloud:
         self.hiperqubes = []
         self.hiperqube = None
         self.hiperqube_details = None
+        self.signatures = []
+        self.signature = None
 
         # Stores the temporary filenames created when downloading
         # thumbnails and raster images from hiperqubes
         self.temp_filenames = []
+
+        # Flag that indicates whether the cursor is set to busy or not.
+        # This will prevent the cursor to be set busy multiple times
+        # which would prevent it to be restored properly
+        self.cursor_busy = False
 
     # noinspection PyMethodMayBeStatic
     def tr(self, message):
@@ -241,15 +252,21 @@ class TerraqubeCloud:
 
     def set_busy_cursor(self):
         """Sets the cursor to a busy cursor."""
-        QApplication.instance().setOverrideCursor(Qt.WaitCursor)
+        if not self.cursor_busy:
+            QApplication.instance().setOverrideCursor(Qt.WaitCursor)
+            self.cursor_busy = True
 
     def restore_cursor(self):
         """Sets the cursor to a busy cursor."""
-        QApplication.instance().restoreOverrideCursor()
+        if self.cursor_busy:
+            QApplication.instance().restoreOverrideCursor()
+            self.cursor_busy = False
 
     def show_error(self, error):
         """Shows the network error receivd."""
-        self.iface.messageBar().pushCritical("Failure", "Error making request to Terraqube Cloud: {0}".format(error))
+        self.iface.messageBar().pushCritical(
+            "Failure",
+            "Error making request to Terraqube Cloud: {0}".format(error))
         self.restore_cursor()
 
     def download_file(self, uri, callback, error):
@@ -259,7 +276,8 @@ class TerraqubeCloud:
         return filename
 
     def find_layer(self, hiperqube_id):
-        """Returns the layer corresponding to this hiperqube id or None if none found."""
+        """Returns the layer corresponding to this hiperqube id or None if none
+        found."""
         for layer in QgsProject.instance().mapLayers().values():
             if isinstance(layer, HiperqubeRasterLayer):
                 if layer.hiperqube_id() == hiperqube_id:
@@ -271,9 +289,12 @@ class TerraqubeCloud:
         def callback(layer):
             if layer:
                 self.iface.setActiveLayer(layer)
-                layer.set_signature_visibility(signature, visibility, self.show_error)
+                layer.set_signature_visibility(
+                    signature, visibility, self.show_error)
             else:
-                self.iface.messageBar().pushCritical("Failure", "Couldn't create raster layer.")
+                self.iface.messageBar().pushCritical(
+                    'Failure',
+                    "Couldn't create raster layer.")
 
         self.show_hiperqube(callback=callback)
 
@@ -285,24 +306,27 @@ class TerraqubeCloud:
                 layer.add_signature(signature, self.show_error)
                 self.append_signature_row(signature, Qt.Checked)
             else:
-                self.iface.messageBar().pushCritical("Failure", "Couldn't create raster layer.")
+                self.iface.messageBar().pushCritical(
+                    'Failure',
+                    "Couldn't create raster layer.")
             self.restore_cursor()
 
         if signature:
             self.show_hiperqube(callback=callback)
         else:
             self.iface.messageBar().pushCritical(
-                "Failure", "Couldn't create signature")
+                'Failure', "Couldn't create signature")
             self.restore_cursor()
 
     def create_signature_callback(self, hiperqube_id, row, col):
         """Creates a signature for the given hiperqube_id."""
         self.set_busy_cursor()
         try:
-            self.cloudqube.create_signature(hiperqube_id, row, col, self.signature_created, self.show_error)
+            self.cloudqube.create_signature(
+                hiperqube_id, row, col, self.signature_created, self.show_error)
         except Exception as err:
             self.iface.messageBar().pushCritical(
-                "Failure", "Couldn't create signature: {0}".format(err))
+                'Failure', "Couldn't create signature: {0}".format(err))
             self.restore_cursor()
 
     def create_signature(self):
@@ -311,24 +335,56 @@ class TerraqubeCloud:
             if layer:
                 self.iface.setActiveLayer(layer)
                 canvas = self.iface.mapCanvas()
-                tool = SignatureTool(canvas, layer, self.create_signature_callback)
+                tool = SignatureTool(
+                    canvas, layer, self.create_signature_callback)
                 canvas.setMapTool(tool)
             else:
                 self.iface.messageBar().pushCritical(
-                    "Failure", "Couldn't create raster layer.")
+                    'Failure', "Couldn't create raster layer.")
 
         self.show_hiperqube(callback=callback)
 
+    def signature_deleted(self):
+        """Executed after a signature is deleted."""
+        layer = self.find_layer(self.signature['hiperqubeId'])
+        if layer:
+            layer.remove_signature(self.signature)
+        self.refresh_signatures()
+
+    def delete_signature(self, signature_id):
+        """Deletes the selected signature."""
+        if self.signature:
+            reply = QMessageBox.warning(
+                self.dlg,
+                'Confirm deletion',
+                'Are you sure you would like to delete the signature at '
+                '[{0},{1}]?'.format(
+                    str(self.signature['col']),
+                    str(self.signature['line'])),
+                QMessageBox.Yes,
+                QMessageBox.No)
+            if reply == QMessageBox.Yes:
+                self.set_busy_cursor()
+                self.cloudqube.delete_signature(
+                    self.signature['hiperqubeId'],
+                    self.signature['line'],
+                    self.signature['col'],
+                    self.signature_deleted,
+                    self.show_error)
+
     def fill_projects_combo(self, projects):
-        """Initializes the project table with the projects retrieved from the server."""
+        """Initializes the project table with the projects retrieved from the
+        server."""
+        self.dlg.deleteProjectButton.setEnabled(False)
         self.projects = projects
         self.dlg.projectsComboBox.clear()
         icon = QIcon(':/plugins/terraqube_cloud/resources/folder.svg')
         for project in projects:
             self.dlg.projectsComboBox.addItem(
-                icon, '{0} - {1}'.format(project['name'], project['createdDate']))
+                icon, '{0} - {1}'.format(project['name'],
+                                         project['createdDate']))
         self.dlg.projectsComboBox.setEnabled(True)
-        self.dlg.addProjectButton.setEnabled(True)
+        self.dlg.createProjectButton.setEnabled(True)
         self.restore_cursor()
 
     def get_hiperqube_status(self, status):
@@ -339,7 +395,8 @@ class TerraqubeCloud:
             return 'Ready'
 
     def fill_hiperqube_table(self, hiperqubes):
-        """Initializes the hiperqube table with the hiperqubes retrieved from the server."""
+        """Initializes the hiperqube table with the hiperqubes retrieved from
+        the server."""
         self.hiperqubes = hiperqubes
         self.dlg.hiperqubesTable.clearContents()
         self.dlg.hiperqubesTable.setRowCount(len(hiperqubes))
@@ -354,7 +411,8 @@ class TerraqubeCloud:
             self.dlg.hiperqubesTable.setItem(
                 i, 3, QTableWidgetItem(format_size(hiperqube['size'])))
             self.dlg.hiperqubesTable.setItem(
-                i, 4, QTableWidgetItem(self.get_hiperqube_status(hiperqube['status'])))
+                i, 4, QTableWidgetItem(
+                    self.get_hiperqube_status(hiperqube['status'])))
             i = i + 1
         self.dlg.hiperqubesTable.setEnabled(True)
         self.dlg.uploadHiperqubeButton.setEnabled(True)
@@ -364,13 +422,15 @@ class TerraqubeCloud:
     def refresh_projects(self):
         self.set_busy_cursor()
         try:
-            self.cloudqube.get_projects(self.fill_projects_combo, self.show_error)
+            self.cloudqube.get_projects(
+                self.fill_projects_combo, self.show_error)
         except Exception as err:
             self.iface.messageBar().pushCritical(
-                "Failure", "Couldn't retrieve projects: {0}".format(err))
+                'Failure', "Couldn't retrieve projects: {0}".format(err))
 
     def signed_in(self, data):
-        self.iface.messageBar().pushSuccess("Success", "Signed in Terraqube Cloud!")
+        self.iface.messageBar().pushSuccess('Success',
+                                            "Signed in Terraqube Cloud!")
         self.refresh_projects()
         self.dlg.terraqubeTab.setCurrentWidget(self.dlg.hiperqubes)
         self.dlg.signInButton.setText('Sign In')
@@ -388,7 +448,6 @@ class TerraqubeCloud:
         """Signs in a user to Terraqube Cloud."""
         self.dlg.signInButton.setEnabled(False)
         self.dlg.signInButton.setText('Signing In...')
-        QApplication.processEvents()
         self.set_busy_cursor()
         server = self.dlg.serverInput.text().strip()
         username = self.dlg.usernameInput.text().strip()
@@ -396,10 +455,12 @@ class TerraqubeCloud:
         if server and username and password:
             self.cloudqube = CloudqubeClient(server)
             try:
-                self.cloudqube.login_user(username, password, self.signed_in, self.sign_in_failed)
+                self.cloudqube.login_user(
+                    username, password, self.signed_in, self.sign_in_failed)
             except Exception as err:
                 self.iface.messageBar().pushCritical(
-                    "Failure", "Couldn't sign in to Terraqube Cloud: {0}".format(err))
+                    'Failure',
+                    "Couldn't sign in to Terraqube Cloud: {0}".format(err))
                 self.restore_cursor()
 
     def show_hiperqube(self, row=None, col=None, callback=None):
@@ -429,10 +490,14 @@ class TerraqubeCloud:
                     if callback:
                         callback(layer)
 
-                self.download_file(self.hiperqube_details['imageUrl'], raster_downloaded, self.show_error)
+                self.download_file(
+                    self.hiperqube_details['imageUrl'],
+                    raster_downloaded,
+                    self.show_error)
             except Exception as err:
                 self.iface.messageBar().pushCritical(
-                    "Failure", "Couldn't download hiperqube raster: {0}.".format(err))
+                    'Failure',
+                    "Couldn't download hiperqube raster: {0}.".format(err))
                 self.restore_cursor()
 
     def reset_thumbnail(self, err='Unknown'):
@@ -443,7 +508,10 @@ class TerraqubeCloud:
         """Shows hiperqube thumbnail once it is downloaded."""
         if filename:
             pixmap = QPixmap(filename).scaled(
-                THUMB_WIDTH, THUMB_HEIGHT, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+                THUMB_WIDTH,
+                THUMB_HEIGHT,
+                Qt.KeepAspectRatio,
+                Qt.SmoothTransformation)
             self.dlg.thumbnailLabel.setPixmap(pixmap)
         else:
             self.reset_thumbnail("Couldn't get thumbnail name.")
@@ -467,7 +535,10 @@ class TerraqubeCloud:
         self.dlg.avgWavelengthDistValueLabel.setText(
             '{:.2f} nm'.format(avg_dist))
         try:
-            self.download_file(hiperqube_details['thumbnailUrl'], self.thumbnail_downloaded, self.reset_thumbnail)
+            self.download_file(
+                hiperqube_details['thumbnailUrl'],
+                self.thumbnail_downloaded,
+                self.reset_thumbnail)
         except Exception as err:
             self.reset_thumbnail(err)
 
@@ -485,6 +556,7 @@ class TerraqubeCloud:
 
     def fill_signatures(self, signatures):
         """Fills all signatures from the list."""
+        self.signatures = signatures
         try:
             # Disconnect previous signal so that it does not trigger
             # while changing rows. It might raise exception
@@ -497,7 +569,8 @@ class TerraqubeCloud:
         if (len(signatures) > 0):
             layer = self.find_layer(signatures[0]['hiperqubeId'])
             for signature in signatures:
-                visibility = layer.signature_visibility(signature) if layer else False
+                visibility = layer.signature_visibility(
+                    signature) if layer else False
                 state = Qt.Checked if visibility else Qt.Unchecked
                 self.append_signature_row(signature, state)
 
@@ -518,7 +591,11 @@ class TerraqubeCloud:
         self.dlg.thumbnailLabel.setPixmap(THUMB_MISSING_PIXMAP)
 
     def clear_signatures(self):
-        self.dlg.signaturesTable.cellChanged.disconnect()
+        try:
+            self.dlg.signaturesTable.cellChanged.disconnect()
+        except:
+            pass
+        self.signatures = []
         self.dlg.signaturesTable.clearContents()
         self.dlg.signaturesTable.setRowCount(0)
         self.dlg.signaturesTable.setEnabled(False)
@@ -538,17 +615,14 @@ class TerraqubeCloud:
         self.set_busy_cursor()
         try:
             self.cloudqube.get_hiperqube_details(
-                self.hiperqube['id'], self.fill_hiperqube_details, self.get_hiperqube_error)
+                self.hiperqube['id'],
+                self.fill_hiperqube_details,
+                self.get_hiperqube_error)
         except Exception as err:
             self.iface.messageBar().pushCritical(
-                "Failure", "Couldn't retrieve hiperqube details: {0}".format(err))
-        try:
-            self.signatures = self.cloudqube.get_signatures(
-                self.hiperqube['id'], self.fill_signatures, self.get_signatures_error)
-        except Exception as err:
-            self.iface.messageBar().pushCritical(
-                "Failure", "Couldn't retrieve projects: {0}".format(err))
-            self.restore_cursor()
+                'Failure',
+                "Couldn't retrieve hiperqube details: {0}".format(err))
+        self.refresh_signatures()
 
     def select_hiperqube(self, current, previous):
         """Action to execute when a hiperqube is selected."""
@@ -558,17 +632,56 @@ class TerraqubeCloud:
                 self.hiperqube = self.hiperqubes[row]
                 self.refresh_hiperqube(self.hiperqube)
                 self.dlg.showHiperqubeButton.setEnabled(True)
+                self.dlg.deleteHiperqubeButton.setEnabled(True)
             else:
                 self.clear_hiperqube_details()
                 self.clear_signatures()
                 self.dlg.showHiperqubeButton.setEnabled(False)
+                self.dlg.deleteHiperqubeButton.setEnabled(False)
+
+    def select_signature(self, current, previous):
+        """Action to execute when a signature is selected."""
+        if current != previous:
+            row = self.dlg.signaturesTable.currentRow()
+            if row >= 0:
+                self.signature = self.signatures[row]
+                self.dlg.deleteSignatureButton.setEnabled(True)
+            else:
+                self.signature = None
+                self.dlg.deleteSignatureButton.setEnabled(False)
 
     def select_project(self, index):
         """Action to execute when a project is selected."""
-        self.project = self.projects[index]
-        self.refresh_hiperqubes()
+        if index >= 0:
+            self.project = self.projects[index]
+            self.refresh_hiperqubes()
+            self.dlg.deleteProjectButton.setEnabled(True)
+        else:
+            self.dlg.deleteProjectButton.setEnabled(False)
 
-    def update_hiperqube_upload_progress(self, bytes_transferred=None):
+    def project_deleted(self):
+        """Executed after a project is deleted."""
+        self.refresh_projects()
+
+    def delete_project(self, index):
+        """Deletes the selected project."""
+        if self.project:
+            reply = QMessageBox.warning(
+                self.dlg,
+                'Confirm deletion',
+                'Are you sure you would like to delete [{0}] project?'.format(
+                    self.project['name']),
+                QMessageBox.Yes,
+                QMessageBox.No)
+            if reply == QMessageBox.Yes:
+                self.set_busy_cursor()
+                self.cloudqube.delete_project(
+                    self.project['id'],
+                    self.project_deleted,
+                    self.show_error)
+
+    def update_hiperqube_upload_progress(self, bytes_transferred=None,
+                                         bytes_total=None):
         # Total Size
         if self.upload_total_size:
             self.uh_dlg.totalSizeValueLabel.setText(
@@ -581,14 +694,15 @@ class TerraqubeCloud:
         if bytes_transferred:
             if not self.upload_current_size:
                 self.upload_current_size = 0
-            self.upload_current_size = self.upload_current_size + bytes_transferred
+            self.upload_current_size = self.upload_current_size \
+                + bytes_transferred
             self.uh_dlg.totalTransferredValueLabel.setText(
                 format_size(self.upload_current_size))
             progress = self.upload_current_size / self.upload_total_size
             self.uh_dlg.transferProgressBar.setValue(progress * 100)
             self.uh_dlg.transferProgressBar.setEnabled(True)
         else:
-            if self.upload_current_size:
+            if self.upload_current_size and self.upload_total_size:
                 progress = self.upload_current_size / self.upload_total_size
             else:
                 self.uh_dlg.totalTransferredValueLabel.setText('-')
@@ -596,7 +710,8 @@ class TerraqubeCloud:
 
         # Total Elapsed
         if self.upload_time_started:
-            delta = datetime.now().replace(microsecond=0) - self.upload_time_started
+            delta = datetime.now().replace(microsecond=0) \
+                - self.upload_time_started
             self.uh_dlg.totalElapsedTimeValueLabel.setText(str(delta))
             if progress:
                 time_left = timedelta(seconds=int(
@@ -608,32 +723,46 @@ class TerraqubeCloud:
                     '-- : -- : --')
         else:
             self.uh_dlg.totalElapsedTimeValueLabel.setText('-- : -- : --')
-        QApplication.processEvents()
+
+    def bil_upload_error(self, err):
+        self.uh_dlg.uploadButton.setText('Done!')
+        self.uh_dlg.reject()
+        self.show_error(err)
+
+    def bil_uploaded(self):
+        self.iface.messageBar().pushSuccess('Success', 'Transfer completed!')
+        self.uh_dlg.uploadButton.setText('Done!')
+        self.uh_dlg.accept()
+        self.restore_cursor()
 
     def hdr_uploaded(self):
         self.upload_time_started = datetime.now().replace(microsecond=0)
         self.uh_dlg.uploadButton.setText('Uploading...')
         try:
             self.cloudqube.upload_hiperqube_bil(
-                self.hiperqube['uploadBilUrl'], self.hiperqube['uploadBilFields'], self.filename, self.update_hiperqube_upload_progress)
-            self.iface.messageBar().pushSuccess("Success", "Transfer completed!")
-            self.uh_dlg.uploadButton.setText('Done!')
-            self.uh_dlg.accept()
+                self.hiperqube['uploadBilUrl'],
+                self.hiperqube['uploadBilFields'],
+                self.filename,
+                self.update_hiperqube_upload_progress,
+                self.bil_uploaded,
+                self.bil_upload_error)
         except Exception as err:
-            self.iface.messageBar().pushCritical("Failure", str(err))
+            self.iface.messageBar().pushCritical('Failure', str(err))
             self.uh_dlg.reject()
-        self.restore_cursor()
+            self.restore_cursor()
 
     def hiperqube_created(self, hiperqube):
         self.hiperqube = hiperqube
         self.filename = self.uh_dlg.hiperqubeFileWidget.filePath()
         try:
             self.cloudqube.upload_hiperqube_hdr(
-                hiperqube['id'], get_hdr_filename(self.filename), self.hdr_uploaded, self.show_error)
+                hiperqube['id'],
+                get_hdr_filename(self.filename),
+                self.hdr_uploaded,
+                self.show_error)
         except Exception as err:
-            self.iface.messageBar().pushCritical("Failure", str(err))
+            self.iface.messageBar().pushCritical('Failure', str(err))
             self.uh_dlg.reject()
-
 
     def start_hiperqube_upload(self):
         """Action to execute to start uploading an hiperqube."""
@@ -643,15 +772,21 @@ class TerraqubeCloud:
             self.uh_dlg.uploadButton.setText('Preparing...')
             self.uh_dlg.uploadButton.show()
             name = self.uh_dlg.hiperqubeNameLineEdit.text()
-            capturedDate = self.uh_dlg.capturedDateDateTimeEdit.dateTime().toPyDateTime()
+            capturedDate = \
+                self.uh_dlg.capturedDateDateTimeEdit.dateTime().toPyDateTime()
             self.cloudqube.create_hiperqube(
-                self.project['id'], name, capturedDate, self.hiperqube_created, self.show_error)
+                self.project['id'],
+                name,
+                capturedDate,
+                self.hiperqube_created,
+                self.show_error)
         except Exception as err:
-            self.iface.messageBar().pushCritical("Failure", str(err))
+            self.iface.messageBar().pushCritical('Failure', str(err))
             self.uh_dlg.reject()
 
     def validate_upload_hiperqube_form(self):
-        """Action to execute to validate whether the upload button should be enabled or not."""
+        """Action to execute to validate whether the upload button should be
+        enabled or not."""
         if (
             len(self.uh_dlg.hiperqubeNameLineEdit.text()) > 0 and
             self.uh_dlg.capturedDateDateTimeEdit.dateTime() and
@@ -671,10 +806,12 @@ class TerraqubeCloud:
                     self.upload_total_size = os.path.getsize(filename)
                 else:
                     self.iface.messageBar().pushCritical(
-                        "Failure", "HDR file {0} missing!".format(hdr_filename))
+                        'Failure', "HDR file {0} missing!".format(hdr_filename))
                     self.uh_dlg.hiperqubeFileWidget.setFilePath(None)
             else:
-                self.iface.messageBar().pushCritical("Failure", "File does not exist!")
+                self.iface.messageBar().pushCritical(
+                    'Failure',
+                    "File does not exist!")
                 self.uh_dlg.hiperqubeFileWidget.setFilePath(None)
             self.update_hiperqube_upload_progress()
         self.validate_upload_hiperqube_form()
@@ -683,7 +820,7 @@ class TerraqubeCloud:
         """Action to execute when the upload hiperqube button is triggered."""
         self.uh_dlg = UploadHiperqubeDialog(self.dlg)
 
-        self.uh_dlg.uploadButton = QPushButton("Upload")
+        self.uh_dlg.uploadButton = QPushButton('Upload')
         self.uh_dlg.uploadButton.setDefault(True)
         self.uh_dlg.uploadButton.clicked.connect(self.start_hiperqube_upload)
         self.uh_dlg.uploadButton.setEnabled(False)
@@ -709,14 +846,66 @@ class TerraqubeCloud:
         self.upload_current_size = None
         self.upload_time_started = None
 
+    def refresh_signatures(self):
+        """Refreshes the list of hiperqubes."""
+        self.set_busy_cursor()
+        try:
+            self.signatures = self.cloudqube.get_signatures(
+                self.hiperqube['id'],
+                self.fill_signatures,
+                self.get_signatures_error)
+        except Exception as err:
+            self.iface.messageBar().pushCritical(
+                'Failure', "Couldn't retrieve projects: {0}".format(err))
+            self.restore_cursor()
+
     def refresh_hiperqubes(self):
         """Refreshes the list of hiperqubes."""
         self.set_busy_cursor()
         try:
-            self.cloudqube.get_hiperqubes(self.project['id'], self.fill_hiperqube_table, self.show_error)
+            self.cloudqube.get_hiperqubes(
+                self.project['id'], self.fill_hiperqube_table, self.show_error)
         except Exception as err:
             self.iface.messageBar().pushCritical(
-                "Failure", "Couldn't retrieve hiperqubes: {0}".format(err))
+                'Failure', "Couldn't retrieve hiperqubes: {0}".format(err))
+
+    def hiperqube_deleted(self):
+        """Executed after a hiperqube is deleted."""
+        self.refresh_hiperqubes()
+
+    def delete_hiperqube(self):
+        """Delete the selected hiperqube."""
+        if self.hiperqube:
+            reply = QMessageBox.warning(
+                self.dlg,
+                'Confirm deletion',
+                'Are you sure you would like to delete [{0}] hiperqube?'.format(
+                    self.hiperqube['name']),
+                QMessageBox.Yes,
+                QMessageBox.No)
+            if reply == QMessageBox.Yes:
+                self.set_busy_cursor()
+                self.cloudqube.delete_hiperqube(
+                    self.hiperqube['id'],
+                    self.hiperqube_deleted,
+                    self.show_error)
+
+    def project_created(self, project):
+        """Action to execute after project has been created."""
+        self.refresh_projects()
+
+    def create_project(self):
+        """Creates a new project."""
+        name, ok = QInputDialog().getText(self.dlg, "Create project",
+                                          "Name of the new project:", QLineEdit.Normal)
+        if ok and name:
+            self.set_busy_cursor()
+            try:
+                self.cloudqube.create_project(name,
+                                              self.project_created, self.show_error)
+            except Exception as err:
+                self.iface.messageBar().pushCritical(
+                    'Failure', "Couldn't create project: {0}".format(err))
 
     def init_account_tab(self):
         """Initializes the Account tab."""
@@ -726,7 +915,9 @@ class TerraqubeCloud:
         """Initializes the Projects GroupBox."""
         self.dlg.projectsComboBox.currentIndexChanged.connect(
             self.select_project)
+        self.dlg.createProjectButton.clicked.connect(self.create_project)
         self.dlg.refreshProjectsButton.clicked.connect(self.refresh_projects)
+        self.dlg.deleteProjectButton.clicked.connect(self.delete_project)
 
     def init_hiperqubes_group_box(self):
         """Initializes the Hiperqubes GroupBox."""
@@ -734,7 +925,8 @@ class TerraqubeCloud:
                    'Last Modified Date', 'Size', 'Status']
         self.dlg.hiperqubesTable.setColumnCount(len(headers))
         self.dlg.hiperqubesTable.setHorizontalHeaderLabels(headers)
-        self.dlg.hiperqubesTable.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        self.dlg.hiperqubesTable.horizontalHeader().setSectionResizeMode(
+            QHeaderView.Stretch)
         self.dlg.hiperqubesTable.currentItemChanged.connect(
             self.select_hiperqube)
         self.dlg.hiperqubesTable.cellDoubleClicked.connect(
@@ -743,6 +935,7 @@ class TerraqubeCloud:
         self.dlg.refreshHiperqubesButton.clicked.connect(
             self.refresh_hiperqubes)
         self.dlg.showHiperqubeButton.clicked.connect(self.show_hiperqube)
+        self.dlg.deleteHiperqubeButton.clicked.connect(self.delete_hiperqube)
 
     def init_hiperqube_details_group_box(self):
         """Initializes the Hiperqube Details GroupBox."""
@@ -750,8 +943,12 @@ class TerraqubeCloud:
         headers = ['Signature (col, line)']
         self.dlg.signaturesTable.setColumnCount(len(headers))
         self.dlg.signaturesTable.setHorizontalHeaderLabels(headers)
+        self.dlg.signaturesTable.currentItemChanged.connect(
+            self.select_signature)
         self.dlg.createSignatureButton.clicked.connect(self.create_signature)
-        self.dlg.hiperqubesTable.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        self.dlg.deleteSignatureButton.clicked.connect(self.delete_signature)
+        self.dlg.hiperqubesTable.horizontalHeader().setSectionResizeMode(
+            QHeaderView.Stretch)
 
     def init_hiperqubes_tab(self):
         """Initializes the Hiperqubes tab."""
@@ -769,7 +966,8 @@ class TerraqubeCloud:
         """Run method that performs all the real work"""
 
         # Create the dialog with elements (after translation) and keep reference
-        # Only create GUI ONCE in callback, so that it will only load when the plugin is started
+        # Only create GUI ONCE in callback, so that it will only load when the
+        # plugin is started
         if self.first_start == True:
             self.first_start = False
             self.dlg = TerraqubeCloudDialog()

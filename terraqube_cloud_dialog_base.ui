@@ -559,7 +559,7 @@
                </widget>
               </item>
               <item>
-               <widget class="QToolButton" name="addProjectButton">
+               <widget class="QToolButton" name="createProjectButton">
                 <property name="enabled">
                  <bool>false</bool>
                 </property>

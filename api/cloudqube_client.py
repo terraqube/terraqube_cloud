@@ -2,16 +2,15 @@ import gzip
 import json
 import os.path
 import pytz.reference
-import requests
 import tempfile
 import time
 
-from qgis.PyQt.QtCore import QUrl, QByteArray, QFile, QIODevice
-from qgis.PyQt.QtNetwork import QNetworkRequest
-from qgis.core import QgsMessageLog, Qgis, QgsNetworkAccessManager
-from .requests_toolbelt import MultipartEncoder
+from qgis.PyQt.QtCore import QUrl, QByteArray, QFile, QIODevice, QVariant
+from qgis.PyQt.QtNetwork import QNetworkRequest, QHttpMultiPart, QHttpPart
+from qgis.core import QgsNetworkAccessManager
 from .cloudqube_json_reply import CloudqubeJsonReply
 from .cloudqube_file_reply import CloudqubeFileReply
+from .cloudqube_progress_reply import CloudqubeProgressReply
 from .login_callback import LoginCallback
 
 UPLOAD_CHUNK_SIZE = 128 * 1024
@@ -27,35 +26,9 @@ class CloudqubeClient:
         self._replies = []
 
     # Private methods
+
     def get_url(self, url):
         return "{0}/terraqube/cloudqube/1.0.0/{1}".format(self._server, url)
-
-    def post(self, url, data={}, content_type="application/json"):
-        url = self.get_url(url)
-        headers = {
-            "Accept": "application/json",
-            "Content-type": content_type
-        }
-        if self._token:
-            headers["Authorization"] = "Bearer {0}".format(self._token)
-        if content_type == 'application/json':
-            data = json.dumps(data)
-        return requests.post(
-            url,
-            data=data,
-            headers=headers)
-
-    def get(self, url, content_type="application/json"):
-        url = self.get_url(url)
-        headers = {
-            "Accept": "application/json",
-            "Content-type": content_type
-        }
-        if self._token:
-            headers["Authorization"] = "Bearer {0}".format(self._token)
-        return requests.get(
-            url,
-            headers=headers)
 
     def finished(self, reply):
         self._replies.remove(reply)
@@ -79,44 +52,95 @@ class CloudqubeClient:
                 'Bearer {0}'.format(self._token)))
         return req
 
-    def get_nam(self, url, callback, error, content_type='application/json'):
+    def get(self, url, callback, error, content_type='application/json'):
         req = self.prepare_request(url, content_type)
         self._replies.append(CloudqubeJsonReply(
             self._nam.get(req), None, callback, self.finished, error))
 
-    def post_json_nam(self, url, data, callback, error, content_type='application/json'):
+    def post_json(self, url, data, callback, error,
+            content_type='application/json'):
         req = self.prepare_request(url, content_type)
         byte_array = self.str_to_byte_array(json.dumps(data)) if data else None
         self._replies.append(CloudqubeJsonReply(self._nam.post(
             req, byte_array), data, callback, self.finished, error))
 
-    def post_bytes_nam(self, url, data, callback, error, content_type='application/octet-stream'):
+    def post_bytes(self, url, data, callback, error,
+            content_type='application/octet-stream'):
         req = self.prepare_request(url, content_type)
         self._replies.append(CloudqubeJsonReply(self._nam.post(
             req, data), data, callback, self.finished, error))
 
+    def delete_nam(self, url, callback, error, content_type='application/json'):
+        req = self.prepare_request(url, content_type)
+        self._replies.append(CloudqubeJsonReply(
+            self._nam.deleteResource(req), None, callback, self.finished, error))
+
+    def add_text_parts(self, multi_part, fields):
+        """Adds all text fields to the multipart object."""
+        for key in fields:
+            text_part = QHttpPart()
+            text_part.setHeader(QNetworkRequest.ContentDispositionHeader,
+                QVariant('form-data; name="{0}"'.format(key)))
+            text_part.setBody(self.str_to_byte_array(fields[key]))
+            multi_part.append(text_part)
+
+    def add_image_part(self, multi_part, filename):
+        """Adds the image field to the multipart object."""
+        image_part = QHttpPart()
+        image_part.setHeader(QNetworkRequest.ContentTypeHeader,
+                             QVariant('application/octet-stream'))
+        image_part.setHeader(
+            QNetworkRequest.ContentDispositionHeader,
+            QVariant('form-data; name="file"'))
+        f = QFile(filename)
+        f.open(QIODevice.ReadOnly)
+        image_part.setBodyDevice(f)
+        f.setParent(multi_part)
+        multi_part.append(image_part)
+
     # Public methods
+
+    # Authentication
 
     def login_user(self, username, password, callback, error):
         """Login user to Terraqube Cloud using username and password."""
         login_callback = LoginCallback(self, callback)
-        response = self.post_json_nam(
-            "user/login", {"username": username, "password": password}, login_callback.notify, error)
+        response = self.post_json(
+            'user/login',
+            {'username': username, 'password': password},
+            login_callback.notify,
+            error)
+
+    # Projects
+
+    def create_project(self, name, callback, error):
+        """Creates a new project with the specified name."""
+        payload = {
+            'name': name
+        }
+        self.post_json("projects", payload, callback, error)
 
     def get_projects(self, callback, error):
         """Get list of projects for current user."""
-        self.get_nam("projects", callback, error)
+        self.get('projects', callback, error)
+
+    def delete_project(self, project_id, callback, error):
+        """Deletes a project."""
+        self.delete_nam("projects/{0}".format(project_id), callback, error)
+
+    # Hiperqubes
 
     def get_hiperqubes(self, project_id, callback, error):
         """Get list of hiperqubes for current user."""
-        self.get_nam(
+        self.get(
             "projects/{0}/hiperqubes".format(project_id), callback, error)
 
     def get_hiperqube_details(self, hiperqube_id, callback, error):
         """Get hiperqube details."""
-        self.get_nam("hiperqubes/{0}".format(hiperqube_id), callback, error)
+        self.get("hiperqubes/{0}".format(hiperqube_id), callback, error)
 
-    def create_hiperqube(self, project_id, name, captured_date, callback, error):
+    def create_hiperqube(self, project_id, name, captured_date, callback,
+            error):
         """Create a new hiperqube."""
         captured_date = captured_date.replace(microsecond=0).replace(
             tzinfo=pytz.reference.LocalTimezone())
@@ -125,58 +149,73 @@ class CloudqubeClient:
             'name': name,
             'capturedDate': captured_date_str
         }
-        self.post_json_nam(
-            "projects/{0}/hiperqubes".format(project_id), payload, callback, error)
+        self.post_json(
+            "projects/{0}/hiperqubes".format(project_id),
+            payload,
+            callback,
+            error)
+
+    def delete_hiperqube(self, hiperqube_id, callback, error):
+        """Deletes a hiperqube."""
+        self.delete_nam("hiperqubes/{0}".format(hiperqube_id), callback, error)
 
     def upload_hiperqube_hdr(self, hiperqube_id, filename, callback, error):
         """Upload an HDR file to an existing hiperqube."""
         f = QFile(filename)
         f.open(QIODevice.ReadOnly)
-        self.post_bytes_nam('hiperqubes/{0}/hdr'.format(hiperqube_id), f, callback, error, content_type='application/octet-stream')
+        self.post_bytes("hiperqubes/{0}/hdr".format(hiperqube_id),
+                            f,
+                            callback,
+                            error,
+                            content_type='application/octet-stream')
 
-    def upload_hiperqube_bil(self, url, fields, filename, callback):
+    def upload_hiperqube_bil(self, url, fields, filename, progress, callback,
+            error):
         """Upload an BIL file to an existing hiperqube."""
-        with open(filename, 'rb') as f:
-            fields['file'] = (filename, ProgressFileWrapper(
-                f, callback))
-            m = MultipartEncoder(fields=fields)
-            response = requests.post(url, data=m, headers={
-                                     'Content-Type': m.content_type})
-        if not response.ok:
-            response.raise_for_status()
+        req = QNetworkRequest(QUrl(url))
+        multi_part = QHttpMultiPart(QHttpMultiPart.FormDataType)
+
+        self.add_text_parts(multi_part, fields)
+        f = self.add_image_part(multi_part, filename)
+        req = self._nam.post(req, multi_part)
+        multi_part.setParent(req)
+        self._replies.append(CloudqubeProgressReply(
+            req, progress, callback, self.finished, error))
+
+    # Signatures
 
     def create_signature(self, hiperqube_id, row, col, callback, error):
         """Creates a new signature of the given row and col."""
-        self.post_json_nam(
-            "hiperqubes/{0}/signatures?line={1}&col={2}".format(hiperqube_id, row, col), None, callback, error)
+        payload = {
+            'line': row,
+            'col': col
+        }
+        self.post_json(
+            "hiperqubes/{0}/signatures".format(hiperqube_id),
+            payload,
+            callback,
+            error)
 
     def get_signatures(self, hiperqube_id, callback, error):
         """Gets all signatures from a hiperqube."""
-        self.get_nam(
+        self.get(
             "hiperqubes/{0}/signatures".format(hiperqube_id), callback, error)
 
+    def delete_signature(self, hiperqube_id, row, col, callback, error):
+        """Deletes a signature."""
+        self.delete_nam(
+            "hiperqubes/{0}/signatures?line={1}&col={2}".format(
+                hiperqube_id, row, col),
+            callback,
+            error)
+
+    # File download
+
     def download_file(self, uri, callback, error):
-        """Downloads the file in the uri in a temporary file and returns its name."""
+        """Downloads the file in the uri in a temporary file and returns its
+        name."""
         req = QNetworkRequest(QUrl(uri))
-        reply = CloudqubeFileReply(self._nam.get(req), callback, self.finished, error)
+        reply = CloudqubeFileReply(self._nam.get(
+            req), callback, self.finished, error)
         self._replies.append(reply)
         return reply.filename()
-
-
-class ProgressFileWrapper(object):
-    def __init__(self, file, callback):
-        self._file = file
-        self.callback = callback
-
-    def read(self, amt=None):
-        time.sleep(1)
-        if not amt:
-            amt = UPLOAD_CHUNK_SIZE
-        buf = self._file.read(UPLOAD_CHUNK_SIZE)
-        QgsMessageLog.logMessage(
-            "Read {0} bytes of data.".format(len(buf)), level=Qgis.Info)
-        self.callback(len(buf))
-        return buf
-
-    def __getattr__(self, name):
-        return getattr(self._file, name)

@@ -19,8 +19,10 @@ class SignatureTool(QgsMapTool):
             point = self._canvas.getCoordinateTransform().toMapCoordinates(x, y)
             data_provider = self._layer.dataProvider()
             extent = data_provider.extent() 
-            width = data_provider.xSize() if data_provider.capabilities() & data_provider.Size else 1000 
-            height = data_provider.ySize() if data_provider.capabilities() & data_provider.Size else 1000 
+            width = data_provider.xSize() if data_provider.capabilities() \
+                & data_provider.Size else 1000 
+            height = data_provider.ySize() if data_provider.capabilities() \
+                & data_provider.Size else 1000 
             xres = extent.width() / width 
             yres = extent.height() / height
             if extent.xMinimum() <= point.x() <= extent.xMaximum() and \
@@ -28,6 +30,5 @@ class SignatureTool(QgsMapTool):
                 col = int(floor((point.x() - extent.xMinimum()) / xres))
                 row = int(floor((extent.yMaximum() - point.y()) / yres))
 
-                QgsMessageLog.logMessage('Unset Map Tool', Qgis.Info)
                 self._canvas.unsetMapTool(self)
                 self._callback(self._layer.hiperqube_id(), row, col)
