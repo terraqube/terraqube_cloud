@@ -24,7 +24,7 @@
   </property>
   <property name="windowIcon">
    <iconset>
-    <normaloff>:/plugins/terraqube_cloud/resources/icon.png</normaloff>:/plugins/terraqube_cloud/resources/icon.png</iconset>
+    <normaloff>:/plugins/terraqube_cloud/img/icon.png</normaloff>:/plugins/terraqube_cloud/img/icon.png</iconset>
   </property>
   <layout class="QVBoxLayout" name="verticalLayout" stretch="0,0,0,0,0,0,0,0,0">
    <item>
@@ -304,7 +304,6 @@
    <header>qgsfilewidget.h</header>
   </customwidget>
  </customwidgets>
- <resources/>
  <connections>
   <connection>
    <sender>uploadHiperqubeButtonBox</sender>

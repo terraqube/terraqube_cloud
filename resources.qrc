@@ -1,14 +1,14 @@
 <RCC>
     <qresource prefix="/plugins/terraqube_cloud" >
-        <file>resources/icon.png</file>
-        <file>resources/logo.png</file>
-        <file>resources/folder-plus.svg</file>
-        <file>resources/trash-alt.svg</file>
-        <file>resources/cloud-upload-alt.svg</file>
-        <file>resources/folder.svg</file>
-        <file>resources/image.svg</file>
-        <file>resources/chart-area.svg</file>
-        <file>resources/sync-alt.svg</file>
-        <file>resources/crosshairs.svg</file>
+        <file>img/icon.png</file>
+        <file>img/logo.png</file>
+        <file>img/folder-plus.svg</file>
+        <file>img/trash-alt.svg</file>
+        <file>img/cloud-upload-alt.svg</file>
+        <file>img/folder.svg</file>
+        <file>img/image.svg</file>
+        <file>img/chart-area.svg</file>
+        <file>img/sync-alt.svg</file>
+        <file>img/crosshairs.svg</file>
     </qresource>
 </RCC>

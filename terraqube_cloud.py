@@ -50,7 +50,7 @@ from datetime import datetime, timedelta
 
 THUMB_WIDTH = 256
 THUMB_HEIGHT = 256
-THUMB_MISSING_RESOURCE = ':/plugins/terraqube_cloud/resources/image.svg'
+THUMB_MISSING_RESOURCE = ':/plugins/terraqube_cloud/img/image.svg'
 THUMB_SIZE = QSize(THUMB_WIDTH, THUMB_HEIGHT)
 ICON_COLOR = QColor('lightGray')
 
@@ -224,7 +224,7 @@ class TerraqubeCloud:
     def initGui(self):
         """Create the menu entries and toolbar icons inside the QGIS GUI."""
 
-        icon_path = ':/plugins/terraqube_cloud/resources/icon.png'
+        icon_path = ':/plugins/terraqube_cloud/img/icon.png'
         self.add_action(
             icon_path,
             text=self.tr(u'Terraqube Hyperspectral Cloud'),
@@ -378,7 +378,7 @@ class TerraqubeCloud:
         self.dlg.deleteProjectButton.setEnabled(False)
         self.projects = projects
         self.dlg.projectsComboBox.clear()
-        icon = QIcon(':/plugins/terraqube_cloud/resources/folder.svg')
+        icon = QIcon(':/plugins/terraqube_cloud/img/folder.svg')
         for project in projects:
             self.dlg.projectsComboBox.addItem(
                 icon, '{0} - {1}'.format(project['name'],

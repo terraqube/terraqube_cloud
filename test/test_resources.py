@@ -31,7 +31,7 @@ class TerraqubeCloudDialogTest(unittest.TestCase):
 
     def test_icon_png(self):
         """Test we can click OK."""
-        path = ':/plugins/TerraqubeCloud/resources/icon.png'
+        path = ':/plugins/TerraqubeCloud/img/icon.png'
         icon = QIcon(path)
         self.assertFalse(icon.isNull())
 
