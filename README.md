@@ -1,3 +1,5 @@
+![Terraqube Hyperspectral Imaging](doc/img/logo_baseline.png)
+
 # Terraqube Cloud plugin v1.0.0
 QGIS3 Plugin to access Terraqube's hyperspectral cloud.
 
@@ -22,7 +24,7 @@ Once installed, you can access Terraqube Cloud dialog from the plugins toolbar a
 
 ### Signing in
 
-Before you can use the plugin you will have to create an account in Terraqube Cloud. You can sign up for free [here](http://www.terraqube.com/signup)
+Before you can use the plugin you will have to create an account in Terraqube Cloud. You can sign up for free [here](http://www.terraqube.com/signup).
 
 Once you have an account, login using your email/password. Keep the default server url.
 
