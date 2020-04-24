@@ -48,7 +48,10 @@ class HiperqubeRasterLayer(QgsRasterLayer):
             error)
 
     def remove_signature(self, signature):
-        self._signatures.remove(signature)
+        try:
+            self._signatures.remove(signature)
+        except:
+            pass
         self.remove_markers(signature)
 
     def signature_visibility(self, signature):
@@ -72,8 +75,9 @@ class HiperqubeRasterLayer(QgsRasterLayer):
             self.add_signature(signature, error, visibility)
     
     def remove_markers(self, signature):
-        for m in signature[MARKERS_KEY]:
-            self._canvas.scene().removeItem(m)
+        if MARKERS_KEY in signature:
+            for m in signature[MARKERS_KEY]:
+                self._canvas.scene().removeItem(m)
 
     def unload(self):
         for s in self._signatures:

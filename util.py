@@ -34,7 +34,7 @@ def calculate_average_dist(wavelengths):
 
 def format_size(size, suffix='B'):
     """Formats the size of a hiperqube."""
-    for unit in ['', 'Ki', 'Mi', 'Gi', 'Ti', 'Pi', 'Ei', 'Zi']:
+    for unit in ['', 'K', 'M', 'G', 'T', 'P', 'E', 'Z']:
         if abs(size) < 1024.0:
             return "%3.1f%s%s" % (size, unit, suffix)
         size /= 1024.0

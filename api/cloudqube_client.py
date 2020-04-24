@@ -179,8 +179,10 @@ class CloudqubeClient:
         f = self.add_image_part(multi_part, filename)
         req = self._nam.post(req, multi_part)
         multi_part.setParent(req)
-        self._replies.append(CloudqubeProgressReply(
-            req, progress, callback, self.finished, error))
+        reply = CloudqubeProgressReply(
+            req, progress, callback, self.finished, error)
+        self._replies.append(reply)
+        return reply
 
     # Signatures
 

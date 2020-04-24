@@ -32,7 +32,7 @@ from qgis.PyQt.QtWidgets import (
     QAction, QTableWidgetItem, QHeaderView, QPushButton, QDialogButtonBox,
     QDialog, QApplication, QMessageBox, QInputDialog, QLineEdit)
 from qgis.PyQt.QtSvg import QSvgRenderer
-from qgis.core import QgsPointXY, QgsProject
+from qgis.core import QgsMessageLog, Qgis, QgsPointXY, QgsProject
 from qgis.gui import QgsVertexMarker
 
 # Initialize Qt resources from file resources.py
@@ -112,9 +112,8 @@ class TerraqubeCloud:
         self.first_start = None
 
         # Create necessary variables used during upload
-        self.upload_total_size = None
-        self.upload_current_size = None
         self.upload_time_started = None
+        self.upload_reply = None
 
         # Create necessary internal project, hiperqube and signature lists.
         self.hiperqubes = []
@@ -683,29 +682,23 @@ class TerraqubeCloud:
     def update_hiperqube_upload_progress(self, bytes_transferred=None,
                                          bytes_total=None):
         # Total Size
-        if self.upload_total_size:
+        if bytes_total:
             self.uh_dlg.totalSizeValueLabel.setText(
-                format_size(self.upload_total_size))
+                format_size(bytes_total))
         else:
             self.uh_dlg.totalSizeValueLabel.setText('-')
 
         # Total Transferred
         progress = None
         if bytes_transferred:
-            if not self.upload_current_size:
-                self.upload_current_size = 0
-            self.upload_current_size = self.upload_current_size \
-                + bytes_transferred
             self.uh_dlg.totalTransferredValueLabel.setText(
-                format_size(self.upload_current_size))
-            progress = self.upload_current_size / self.upload_total_size
-            self.uh_dlg.transferProgressBar.setValue(progress * 100)
-            self.uh_dlg.transferProgressBar.setEnabled(True)
+                format_size(bytes_transferred))
+            if bytes_total:
+                progress = bytes_transferred / bytes_total
+                self.uh_dlg.transferProgressBar.setValue(progress * 100)
+                self.uh_dlg.transferProgressBar.setEnabled(True)
         else:
-            if self.upload_current_size and self.upload_total_size:
-                progress = self.upload_current_size / self.upload_total_size
-            else:
-                self.uh_dlg.totalTransferredValueLabel.setText('-')
+            self.uh_dlg.totalTransferredValueLabel.setText('-')
             self.uh_dlg.transferProgressBar.setEnabled(False)
 
         # Total Elapsed
@@ -739,7 +732,7 @@ class TerraqubeCloud:
         self.upload_time_started = datetime.now().replace(microsecond=0)
         self.uh_dlg.uploadButton.setText('Uploading...')
         try:
-            self.cloudqube.upload_hiperqube_bil(
+            self.upload_reply = self.cloudqube.upload_hiperqube_bil(
                 self.hiperqube['uploadBilUrl'],
                 self.hiperqube['uploadBilFields'],
                 self.filename,
@@ -802,9 +795,7 @@ class TerraqubeCloud:
         if len(filename) > 0:
             if os.path.exists(filename):
                 hdr_filename = get_hdr_filename(filename)
-                if os.path.exists(hdr_filename):
-                    self.upload_total_size = os.path.getsize(filename)
-                else:
+                if not os.path.exists(hdr_filename):
                     self.iface.messageBar().pushCritical(
                         'Failure', "HDR file {0} missing!".format(hdr_filename))
                     self.uh_dlg.hiperqubeFileWidget.setFilePath(None)
@@ -841,9 +832,10 @@ class TerraqubeCloud:
 
         if self.uh_dlg.exec_() == QDialog.Accepted:
             self.select_project(self.dlg.projectsComboBox.currentIndex())
+        else:
+            if self.upload_reply:
+                self.upload_reply.abort()
 
-        self.upload_total_size = None
-        self.upload_current_size = None
         self.upload_time_started = None
 
     def refresh_signatures(self):
