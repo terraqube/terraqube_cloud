@@ -261,11 +261,11 @@ class TerraqubeCloud:
             QApplication.instance().restoreOverrideCursor()
             self.cursor_busy = False
 
-    def show_error(self, error):
+    def show_error(self, error, error_str):
         """Shows the network error receivd."""
         self.iface.messageBar().pushCritical(
             "Failure",
-            "Error making request to Terraqube Cloud: {0}".format(error))
+            "Error making request to Terraqube Cloud: [{0}] - ".format(error, error_str))
         self.restore_cursor()
 
     def download_file(self, uri, callback, error):
@@ -436,11 +436,11 @@ class TerraqubeCloud:
         self.dlg.signInButton.setEnabled(True)
         self.restore_cursor()
 
-    def sign_in_failed(self, err):
+    def sign_in_failed(self, error, error_str):
         """Handles sign in failure."""
         self.dlg.signInButton.setText('Sign In')
         self.dlg.signInButton.setEnabled(True)
-        self.show_error(err)
+        self.show_error(error, error_str)
         self.restore_cursor()
 
     def sign_in(self):
@@ -499,9 +499,9 @@ class TerraqubeCloud:
                     "Couldn't download hiperqube raster: {0}.".format(err))
                 self.restore_cursor()
 
-    def reset_thumbnail(self, err='Unknown'):
+    def reset_thumbnail(self, error=None, error_str='Unknown'):
         self.dlg.thumbnailLabel.setPixmap(THUMB_MISSING_PIXMAP)
-        self.show_error(err)
+        self.show_error(error, error_str)
 
     def thumbnail_downloaded(self, filename):
         """Shows hiperqube thumbnail once it is downloaded."""
@@ -601,14 +601,14 @@ class TerraqubeCloud:
         self.dlg.createSignatureButton.setEnabled(False)
         self.dlg.deleteSignatureButton.setEnabled(False)
 
-    def get_hiperqube_error(self, err):
+    def get_hiperqube_error(self, error, error_str):
         self.clear_hiperqube_details()
         self.clear_signatures()
-        self.show_error(err)
+        self.show_error(error, error_str)
 
-    def get_signatures_error(self, err):
+    def get_signatures_error(self, error, error_str):
         self.clear_signatures()
-        self.show_error(err)
+        self.show_error(error, error_str)
 
     def refresh_hiperqube(self, hiperqube):
         self.set_busy_cursor()
@@ -717,10 +717,10 @@ class TerraqubeCloud:
         else:
             self.uh_dlg.totalElapsedTimeValueLabel.setText('-- : -- : --')
 
-    def bil_upload_error(self, err):
+    def bil_upload_error(self, error, error_str):
         self.uh_dlg.uploadButton.setText('Done!')
         self.uh_dlg.reject()
-        self.show_error(err)
+        self.show_error(error, error_str)
 
     def bil_uploaded(self):
         self.iface.messageBar().pushSuccess('Success', 'Transfer completed!')

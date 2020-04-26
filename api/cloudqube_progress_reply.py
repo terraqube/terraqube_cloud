@@ -2,16 +2,16 @@ import tempfile
 
 from qgis.PyQt.QtCore import QFile, QIODevice
 from qgis.PyQt.QtNetwork import QNetworkReply, QNetworkRequest
+from .cloudqube_reply import CloudqubeReply
 
 
-class CloudqubeProgressReply:
+class CloudqubeProgressReply(CloudqubeReply):
     """Class that handles uploads with progress."""
 
     def __init__(self, reply, progress, callback, finished, error):
-        reply.error.connect(error)
+        super().__init__(reply, error)
         reply.finished.connect(self.finished)
         reply.uploadProgress.connect(progress)
-        self._reply = reply
         self._callback = callback
         self._finished = finished
 
@@ -26,4 +26,3 @@ class CloudqubeProgressReply:
 
     def abort(self):
         self._reply.abort()
-        

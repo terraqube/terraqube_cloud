@@ -1,15 +1,15 @@
 from qgis.PyQt.QtCore import QByteArray
 from qgis.PyQt.QtNetwork import QNetworkReply
+from .cloudqube_reply import CloudqubeReply
 
 import json
 
 
-class CloudqubeJsonReply:
+class CloudqubeJsonReply(CloudqubeReply):
     def __init__(self, reply, stream, callback, finished, error):
-        reply.error.connect(error)
+        super().__init__(reply, error)
         reply.readyRead.connect(self.read)
         reply.finished.connect(self.finished)
-        self._reply = reply
         self._callback = callback
         self._finished = finished
         self._data = QByteArray()
