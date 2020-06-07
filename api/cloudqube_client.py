@@ -7,11 +7,13 @@ import time
 
 from qgis.PyQt.QtCore import QUrl, QByteArray, QFile, QIODevice, QVariant
 from qgis.PyQt.QtNetwork import QNetworkRequest, QHttpMultiPart, QHttpPart
-from qgis.core import QgsNetworkAccessManager
+from qgis.core import QgsNetworkAccessManager, QgsMessageLog
 from .cloudqube_json_reply import CloudqubeJsonReply
 from .cloudqube_file_reply import CloudqubeFileReply
+from .cloudqube_multipart_progress_reply import CloudqubeMultipartProgressReply
 from .cloudqube_progress_reply import CloudqubeProgressReply
 from .login_callback import LoginCallback
+from .multipart_file import MultipartFile
 
 UPLOAD_CHUNK_SIZE = 128 * 1024
 
@@ -28,7 +30,10 @@ class CloudqubeClient:
     # Private methods
 
     def get_url(self, url):
-        return "{0}/terraqube/cloudqube/1.0.0/{1}".format(self._server, url)
+        if url.startswith('http'):
+            return url
+        else:
+            return "{0}/terraqube/cloudqube/1.0.0/{1}".format(self._server, url)
 
     def finished(self, reply):
         self._replies.remove(reply)
@@ -64,6 +69,13 @@ class CloudqubeClient:
         self._replies.append(CloudqubeJsonReply(self._nam.post(
             req, byte_array), data, callback, self.finished, error))
 
+    def put_json(self, url, data, callback, error,
+            content_type='application/json'):
+        req = self.prepare_request(url, content_type)
+        byte_array = self.str_to_byte_array(json.dumps(data)) if data else None
+        self._replies.append(CloudqubeJsonReply(self._nam.put(
+            req, byte_array), data, callback, self.finished, error))
+
     def post_bytes(self, url, data, callback, error,
             content_type='application/octet-stream'):
         req = self.prepare_request(url, content_type)
@@ -97,6 +109,27 @@ class CloudqubeClient:
         image_part.setBodyDevice(f)
         f.setParent(multi_part)
         multi_part.append(image_part)
+
+    def complete_hiperqube_upload(self, hiperqube_id, uploaded_parts, callback, error):
+        QgsMessageLog.logMessage('complete_hiperqube_upload: started')
+        payload = uploaded_parts
+        self.put_json(
+            "hiperqubes/{0}/upload".format(hiperqube_id),
+            payload,
+            callback,
+            error)
+
+    def create_hiperqube_upload(self, hiperqube_id, size, callback, error):
+        """Creates a new upload for the given hiperqube."""
+        QgsMessageLog.logMessage('create_hiperqube_upload: started')
+        payload = {
+            'size': size
+        }
+        self.post_json(
+            "hiperqubes/{0}/upload".format(hiperqube_id),
+            payload,
+            callback,
+            error)
 
     # Public methods
 
@@ -171,18 +204,69 @@ class CloudqubeClient:
 
     def upload_hiperqube_bil(self, url, fields, filename, progress, callback,
             error):
-        """Upload an BIL file to an existing hiperqube."""
+        """Upload a BIL file to an existing hiperqube."""
         req = QNetworkRequest(QUrl(url))
         multi_part = QHttpMultiPart(QHttpMultiPart.FormDataType)
 
         self.add_text_parts(multi_part, fields)
         f = self.add_image_part(multi_part, filename)
-        req = self._nam.post(req, multi_part)
-        multi_part.setParent(req)
+        rep = self._nam.post(req, multi_part)
+        multi_part.setParent(rep)
         reply = CloudqubeProgressReply(
             req, progress, callback, self.finished, error)
         self._replies.append(reply)
-        return reply
+
+    def upload_hiperqube_bil_multipart(self, hiperqube_id, filename, progress, callback,
+            error):
+        """Upload a BIL file to an existing hiperqube in multiple parts."""
+
+        def hiperqube_upload_created(parts):
+            QgsMessageLog.logMessage('hiperqube_upload_created: sorting part numbers')
+            parts = sorted(parts, key=lambda part: part['partNumber'])
+            QgsMessageLog.logMessage('hiperqube_upload_created: sorted!')
+            uploaded_parts = []
+            f = QFile(filename)
+            QgsMessageLog.logMessage('hiperqube_upload_created: opening file')
+            f.open(QIODevice.ReadOnly)
+            QgsMessageLog.logMessage('hiperqube_upload_created: file open')
+
+            def upload_part(index):
+                QgsMessageLog.logMessage('hiperqube_upload_created: uploading part {0}'.format(index))
+                def part_uploaded():
+                    nonlocal uploaded_size
+                    nonlocal index
+                    e_tag = self.byte_array_to_string(rep.rawHeader(b'ETag'))
+                    QgsMessageLog.logMessage('part_uplaoded: eTag {0}'.format(e_tag))
+                    uploaded_size = uploaded_size + size
+                    uploaded_parts.append({ 'eTag': e_tag, 'partNumber': part_number })
+                    index = index + 1
+                    if index < len(parts):
+                        upload_part(index)
+                    else:
+                        QgsMessageLog.logMessage('part_uplaoded: closing file'.format(e_tag))
+                        f.close()
+                        self.complete_hiperqube_upload(hiperqube_id, uploaded_parts, callback, error)
+
+                nonlocal uploaded_size
+                part = parts[index]
+                url = part['url']
+                size = part['size']
+                part_number = part['partNumber']
+                req = QNetworkRequest(QUrl(url))
+                data = f.read(size)
+                QgsMessageLog.logMessage('upload_part: making put request')
+                rep = self._nam.put(req, data)
+                QgsMessageLog.logMessage('upload_part: got reply')
+                reply = CloudqubeMultipartProgressReply(
+                    uploaded_size, total_size, rep, progress, part_uploaded, self.finished, error)
+                QgsMessageLog.logMessage('upload_part: appending reply')
+                self._replies.append(reply)
+
+            upload_part(0)
+
+        uploaded_size = 0
+        total_size = os.path.getsize(filename)
+        self.create_hiperqube_upload(hiperqube_id, total_size, hiperqube_upload_created, error)
 
     # Signatures
 
@@ -221,3 +305,11 @@ class CloudqubeClient:
             req), callback, self.finished, error)
         self._replies.append(reply)
         return reply.filename()
+
+    # Abort
+
+    def abort_upload(self):
+        """Aborts any pending upload."""
+        for reply in self._replies:
+            reply.abort()
+        self._replies = []

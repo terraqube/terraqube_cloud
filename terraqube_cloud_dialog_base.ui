@@ -41,7 +41,7 @@
         <enum>QTabWidget::North</enum>
        </property>
        <property name="currentIndex">
-        <number>0</number>
+        <number>1</number>
        </property>
        <widget class="QWidget" name="account">
         <attribute name="title">
@@ -493,6 +493,9 @@
                    <property name="enabled">
                     <bool>false</bool>
                    </property>
+                   <property name="toolTip">
+                    <string>Create a new signature</string>
+                   </property>
                    <property name="text">
                     <string>...</string>
                    </property>
@@ -503,9 +506,29 @@
                   </widget>
                  </item>
                  <item>
+                  <widget class="QToolButton" name="downloadSignatureButton">
+                   <property name="enabled">
+                    <bool>false</bool>
+                   </property>
+                   <property name="toolTip">
+                    <string>Download signature to disk</string>
+                   </property>
+                   <property name="text">
+                    <string>...</string>
+                   </property>
+                   <property name="icon">
+                    <iconset resource="resources.qrc">
+                     <normaloff>:/plugins/terraqube_cloud/img/download.svg</normaloff>:/plugins/terraqube_cloud/img/download.svg</iconset>
+                   </property>
+                  </widget>
+                 </item>
+                 <item>
                   <widget class="QToolButton" name="deleteSignatureButton">
                    <property name="enabled">
                     <bool>false</bool>
+                   </property>
+                   <property name="toolTip">
+                    <string>Permanently delete signature</string>
                    </property>
                    <property name="text">
                     <string>...</string>

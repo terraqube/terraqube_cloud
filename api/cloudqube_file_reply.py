@@ -2,16 +2,16 @@ import tempfile
 
 from qgis.PyQt.QtCore import QFile, QIODevice
 from qgis.PyQt.QtNetwork import QNetworkReply, QNetworkRequest
+from .cloudqube_reply import CloudqubeReply
 
 
-class CloudqubeFileReply:
+class CloudqubeFileReply(CloudqubeReply):
     """Class that handles file downloads."""
 
     def __init__(self, reply, callback, finished, error):
-        reply.error.connect(error)
+        super().__init__(reply, error)
         reply.readyRead.connect(self.read)
         reply.finished.connect(self.finished)
-        self._reply = reply
         self._callback = callback
         self._finished = finished
 

@@ -23,6 +23,3 @@ class CloudqubeProgressReply(CloudqubeReply):
         # which will remove all handling objects
         # and close all streams
         self._finished(self)
-
-    def abort(self):
-        self._reply.abort()

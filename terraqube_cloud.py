@@ -26,13 +26,13 @@ import traceback
 
 from .api.cloudqube_client import CloudqubeClient
 from qgis.PyQt.QtCore import (
-    QSettings, QTranslator, QCoreApplication, QDateTime, Qt, QSize)
+    QSettings, QTranslator, QCoreApplication, QDateTime, Qt, QSize, QFile)
 from qgis.PyQt.QtGui import QIcon, QPixmap, QImage, QPainter, QColor
 from qgis.PyQt.QtWidgets import (
     QAction, QTableWidgetItem, QHeaderView, QPushButton, QDialogButtonBox,
-    QDialog, QApplication, QMessageBox, QInputDialog, QLineEdit)
+    QDialog, QApplication, QMessageBox, QInputDialog, QLineEdit, QFileDialog)
 from qgis.PyQt.QtSvg import QSvgRenderer
-from qgis.core import QgsMessageLog, Qgis, QgsPointXY, QgsProject
+from qgis.core import QgsMessageLog, Qgis, QgsProject
 from qgis.gui import QgsVertexMarker
 
 # Initialize Qt resources from file resources.py
@@ -53,6 +53,7 @@ THUMB_HEIGHT = 256
 THUMB_MISSING_RESOURCE = ':/plugins/terraqube_cloud/img/image.svg'
 THUMB_SIZE = QSize(THUMB_WIDTH, THUMB_HEIGHT)
 ICON_COLOR = QColor('lightGray')
+BIG_FILE_SIZE_THRESHOLD = 100 * 1024 * 1024
 
 
 def get_colored_pixmap(filename, color, size):
@@ -113,7 +114,6 @@ class TerraqubeCloud:
 
         # Create necessary variables used during upload
         self.upload_time_started = None
-        self.upload_reply = None
 
         # Create necessary internal project, hiperqube and signature lists.
         self.hiperqubes = []
@@ -343,6 +343,18 @@ class TerraqubeCloud:
 
         self.show_hiperqube(callback=callback)
 
+    def download_signature(self):
+        """Asks for file to save and saves the signature accordingly."""
+        def signature_downloaded(filename):
+            if not QFile.copy(filename, destination):
+                self.show_error('Error writing to file [{0}]. Check that the file does not exist already.'.format(destination))
+
+        if self.signature:
+            destination = QFileDialog.getSaveFileName(self.dlg, 'Save signature', filter='Signature (*.svg)')[0]
+            if destination:
+                self.download_file(self.signature['url'], signature_downloaded, self.show_error)
+
+
     def signature_deleted(self):
         """Executed after a signature is deleted."""
         layer = self.find_layer(self.signature['hiperqubeId'])
@@ -350,7 +362,7 @@ class TerraqubeCloud:
             layer.remove_signature(self.signature)
         self.refresh_signatures()
 
-    def delete_signature(self, signature_id):
+    def delete_signature(self):
         """Deletes the selected signature."""
         if self.signature:
             reply = QMessageBox.warning(
@@ -386,10 +398,13 @@ class TerraqubeCloud:
         self.dlg.createProjectButton.setEnabled(True)
         self.restore_cursor()
 
-    def get_hiperqube_status(self, status):
+    def get_hiperqube_status(self, status, progress):
         """Shows the appropriate string depending on the status."""
         if status != 'READY':
-            return 'Preparing'
+            if progress > 0:
+                return 'Preparing ({0}%)'.format(progress)
+            else:
+                return 'Preparing'
         else:
             return 'Ready'
 
@@ -411,15 +426,27 @@ class TerraqubeCloud:
                 i, 3, QTableWidgetItem(format_size(hiperqube['size'])))
             self.dlg.hiperqubesTable.setItem(
                 i, 4, QTableWidgetItem(
-                    self.get_hiperqube_status(hiperqube['status'])))
+                    self.get_hiperqube_status(hiperqube['status'], hiperqube['progress'])))
             i = i + 1
         self.dlg.hiperqubesTable.setEnabled(True)
         self.dlg.uploadHiperqubeButton.setEnabled(True)
         self.dlg.refreshHiperqubesButton.setEnabled(True)
         self.restore_cursor()
 
+    def clear_hiperqubes_table(self):
+        """Clears the hiperqube table."""
+        self.hiperqubes = None
+        self.dlg.hiperqubesTable.clearContents()
+        self.dlg.hiperqubesTable.setRowCount(0)
+        self.dlg.hiperqubesTable.setEnabled(False)
+        self.dlg.uploadHiperqubeButton.setEnabled(False)
+        self.dlg.refreshHiperqubesButton.setEnabled(False)
+        self.dlg.showHiperqubeButton.setEnabled(False)
+        self.dlg.deleteHiperqubeButton.setEnabled(False)
+
     def refresh_projects(self):
         self.set_busy_cursor()
+        self.clear_hiperqubes_table()
         try:
             self.cloudqube.get_projects(
                 self.fill_projects_combo, self.show_error)
@@ -703,12 +730,13 @@ class TerraqubeCloud:
 
         # Total Elapsed
         if self.upload_time_started:
-            delta = datetime.now().replace(microsecond=0) \
-                - self.upload_time_started
+            now = datetime.now().replace(microsecond=0)
+            delta = now - self.upload_time_started
             self.uh_dlg.totalElapsedTimeValueLabel.setText(str(delta))
             if progress:
-                time_left = timedelta(seconds=int(
-                    delta.total_seconds() / progress))
+                eta = int(delta.total_seconds() / progress) - \
+                    delta.total_seconds()
+                time_left = timedelta(seconds=eta)
                 self.uh_dlg.estimatedRemainingTimeValueLabel.setText(
                     str(time_left))
             else:
@@ -718,7 +746,7 @@ class TerraqubeCloud:
             self.uh_dlg.totalElapsedTimeValueLabel.setText('-- : -- : --')
 
     def bil_upload_error(self, error, error_str):
-        self.uh_dlg.uploadButton.setText('Done!')
+        self.uh_dlg.uploadButton.setText('Error!')
         self.uh_dlg.reject()
         self.show_error(error, error_str)
 
@@ -732,13 +760,21 @@ class TerraqubeCloud:
         self.upload_time_started = datetime.now().replace(microsecond=0)
         self.uh_dlg.uploadButton.setText('Uploading...')
         try:
-            self.upload_reply = self.cloudqube.upload_hiperqube_bil(
-                self.hiperqube['uploadBilUrl'],
-                self.hiperqube['uploadBilFields'],
-                self.filename,
-                self.update_hiperqube_upload_progress,
-                self.bil_uploaded,
-                self.bil_upload_error)
+            if os.path.getsize(self.filename) < BIG_FILE_SIZE_THRESHOLD:
+                self.cloudqube.upload_hiperqube_bil(
+                    self.hiperqube['uploadBilUrl'],
+                    self.hiperqube['uploadBilFields'],
+                    self.filename,
+                    self.update_hiperqube_upload_progress,
+                    self.bil_uploaded,
+                    self.bil_upload_error)
+            else:
+                self.cloudqube.upload_hiperqube_bil_multipart(
+                    self.hiperqube['id'],
+                    self.filename,
+                    self.update_hiperqube_upload_progress,
+                    self.bil_uploaded,
+                    self.bil_upload_error)
         except Exception as err:
             self.iface.messageBar().pushCritical('Failure', str(err))
             self.uh_dlg.reject()
@@ -833,8 +869,7 @@ class TerraqubeCloud:
         if self.uh_dlg.exec_() == QDialog.Accepted:
             self.select_project(self.dlg.projectsComboBox.currentIndex())
         else:
-            if self.upload_reply:
-                self.upload_reply.abort()
+            self.cloudqube.abort_upload()
 
         self.upload_time_started = None
 
@@ -888,13 +923,16 @@ class TerraqubeCloud:
 
     def create_project(self):
         """Creates a new project."""
-        name, ok = QInputDialog().getText(self.dlg, "Create project",
-                                          "Name of the new project:", QLineEdit.Normal)
+        name, ok = QInputDialog().getText(
+            self.dlg,
+            "Create project",
+            "Name of the new project:",
+            QLineEdit.Normal)
         if ok and name:
             self.set_busy_cursor()
             try:
-                self.cloudqube.create_project(name,
-                                              self.project_created, self.show_error)
+                self.cloudqube.create_project(
+                    name, self.project_created, self.show_error)
             except Exception as err:
                 self.iface.messageBar().pushCritical(
                     'Failure', "Couldn't create project: {0}".format(err))
@@ -938,6 +976,8 @@ class TerraqubeCloud:
         self.dlg.signaturesTable.currentItemChanged.connect(
             self.select_signature)
         self.dlg.createSignatureButton.clicked.connect(self.create_signature)
+        self.dlg.downloadSignatureButton.clicked.connect(
+            self.download_signature)
         self.dlg.deleteSignatureButton.clicked.connect(self.delete_signature)
         self.dlg.hiperqubesTable.horizontalHeader().setSectionResizeMode(
             QHeaderView.Stretch)
