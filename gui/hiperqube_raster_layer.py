@@ -25,7 +25,7 @@ class HiperqubeRasterLayer(QgsRasterLayer):
     def add_signature(self, signature, error, visibility=True):
         s = self.find_signature(signature['id'])
         if s:
-            remove_signature(s)
+            self.remove_signature(s)
         signature[MARKERS_KEY] = []
         self._signatures.append(signature)
         m = QgsVertexMarker(self._canvas)

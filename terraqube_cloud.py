@@ -32,7 +32,7 @@ from qgis.PyQt.QtWidgets import (
     QAction, QTableWidgetItem, QHeaderView, QPushButton, QDialogButtonBox,
     QDialog, QApplication, QMessageBox, QInputDialog, QLineEdit, QFileDialog)
 from qgis.PyQt.QtSvg import QSvgRenderer
-from qgis.core import QgsMessageLog, Qgis, QgsProject
+from qgis.core import QgsProject
 from qgis.gui import QgsVertexMarker
 
 # Initialize Qt resources from file resources.py
@@ -304,6 +304,8 @@ class TerraqubeCloud:
                 self.iface.setActiveLayer(layer)
                 layer.add_signature(signature, self.show_error)
                 self.append_signature_row(signature, Qt.Checked)
+                self.dlg.signaturesTable.cellChanged.connect(
+                    self.signature_cell_changed)
             else:
                 self.iface.messageBar().pushCritical(
                     'Failure',
@@ -311,6 +313,7 @@ class TerraqubeCloud:
             self.restore_cursor()
 
         if signature:
+            self.signatures.append(signature)
             self.show_hiperqube(callback=callback)
         else:
             self.iface.messageBar().pushCritical(
@@ -626,6 +629,7 @@ class TerraqubeCloud:
         self.dlg.signaturesTable.setRowCount(0)
         self.dlg.signaturesTable.setEnabled(False)
         self.dlg.createSignatureButton.setEnabled(False)
+        self.dlg.downloadSignatureButton.setEnabled(False)
         self.dlg.deleteSignatureButton.setEnabled(False)
 
     def get_hiperqube_error(self, error, error_str):
@@ -671,9 +675,11 @@ class TerraqubeCloud:
             row = self.dlg.signaturesTable.currentRow()
             if row >= 0:
                 self.signature = self.signatures[row]
+                self.dlg.downloadSignatureButton.setEnabled(True)
                 self.dlg.deleteSignatureButton.setEnabled(True)
             else:
                 self.signature = None
+                self.dlg.downloadSignatureButton.setEnabled(False)
                 self.dlg.deleteSignatureButton.setEnabled(False)
 
     def select_project(self, index):
@@ -877,7 +883,7 @@ class TerraqubeCloud:
         """Refreshes the list of hiperqubes."""
         self.set_busy_cursor()
         try:
-            self.signatures = self.cloudqube.get_signatures(
+            self.cloudqube.get_signatures(
                 self.hiperqube['id'],
                 self.fill_signatures,
                 self.get_signatures_error)
