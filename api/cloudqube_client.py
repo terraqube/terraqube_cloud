@@ -33,7 +33,7 @@ class CloudqubeClient:
         if url.startswith('http'):
             return url
         else:
-            return "{0}/terraqube/cloudqube/1.0.0/{1}".format(self._server, url)
+            return "{0}/api/1.0.0/{1}".format(self._server, url)
 
     def finished(self, reply):
         self._replies.remove(reply)
