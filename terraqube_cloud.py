@@ -320,12 +320,17 @@ class TerraqubeCloud:
                 'Failure', "Couldn't create signature")
             self.restore_cursor()
 
-    def create_signature_callback(self, hiperqube_id, row, col):
+    def create_signature_callback(self, hiperqube_id, pixels):
         """Creates a signature for the given hiperqube_id."""
         self.set_busy_cursor()
         try:
-            self.cloudqube.create_signature(
-                hiperqube_id, row, col, self.signature_created, self.show_error)
+            name, ok = QInputDialog().getText(self.dlg,
+                "Create signature",
+                "Name of the new signature:",
+                QLineEdit.Normal)
+            if ok and name:
+                self.cloudqube.create_signature(
+                    hiperqube_id, name, pixels, self.signature_created, self.show_error)
         except Exception as err:
             self.iface.messageBar().pushCritical(
                 'Failure', "Couldn't create signature: {0}".format(err))
@@ -371,18 +376,14 @@ class TerraqubeCloud:
             reply = QMessageBox.warning(
                 self.dlg,
                 'Confirm deletion',
-                'Are you sure you would like to delete the signature at '
-                '[{0},{1}]?'.format(
-                    str(self.signature['col']),
-                    str(self.signature['line'])),
+                'Are you sure you would like to delete the signature '
+                '"{0}"'.format(str(self.signature['name'])),
                 QMessageBox.Yes,
                 QMessageBox.No)
             if reply == QMessageBox.Yes:
                 self.set_busy_cursor()
                 self.cloudqube.delete_signature(
-                    self.signature['hiperqubeId'],
-                    self.signature['line'],
-                    self.signature['col'],
+                    self.signature['id'],
                     self.signature_deleted,
                     self.show_error)
 
@@ -976,7 +977,7 @@ class TerraqubeCloud:
     def init_hiperqube_details_group_box(self):
         """Initializes the Hiperqube Details GroupBox."""
         self.dlg.thumbnailLabel.setPixmap(THUMB_MISSING_PIXMAP)
-        headers = ['Signature (col, line)']
+        headers = ['Signature']
         self.dlg.signaturesTable.setColumnCount(len(headers))
         self.dlg.signaturesTable.setHorizontalHeaderLabels(headers)
         self.dlg.signaturesTable.currentItemChanged.connect(

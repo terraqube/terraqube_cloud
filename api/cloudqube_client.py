@@ -270,11 +270,17 @@ class CloudqubeClient:
 
     # Signatures
 
-    def create_signature(self, hiperqube_id, row, col, callback, error):
-        """Creates a new signature of the given row and col."""
+    def create_signature(self, hiperqube_id, name, pixels, callback, error):
+        """Creates a new signature with the given name and pixels."""
+        points = []
+        for pixel in pixels:
+            points.append({
+                'line': pixel[0],
+                'col': pixel[1]
+            })
         payload = {
-            'line': row,
-            'col': col
+            'name': name,
+            'points': points
         }
         self.post_json(
             "hiperqubes/{0}/signatures".format(hiperqube_id),
@@ -287,11 +293,10 @@ class CloudqubeClient:
         self.get(
             "hiperqubes/{0}/signatures".format(hiperqube_id), callback, error)
 
-    def delete_signature(self, hiperqube_id, row, col, callback, error):
+    def delete_signature(self, signature_id, callback, error):
         """Deletes a signature."""
         self.delete_nam(
-            "hiperqubes/{0}/signatures?line={1}&col={2}".format(
-                hiperqube_id, row, col),
+            "signatures/{0}".format(signature_id),
             callback,
             error)
 

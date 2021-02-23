@@ -97,6 +97,5 @@ class SignatureTool(QgsMapTool):
         if len(self._pixels) > 0:
             self._canvas.unsetMapTool(self)
             self._rubberBand.reset()
-            pixel = self._pixels[0]
-            self._callback(self._layer.hiperqube_id(), pixel[0], pixel[1])
+            self._callback(self._layer.hiperqube_id(), self._pixels)
         
