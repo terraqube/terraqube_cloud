@@ -322,13 +322,13 @@ class TerraqubeCloud:
 
     def create_signature_callback(self, hiperqube_id, pixels):
         """Creates a signature for the given hiperqube_id."""
-        self.set_busy_cursor()
         try:
             name, ok = QInputDialog().getText(self.dlg,
                 "Create signature",
                 "Name of the new signature:",
                 QLineEdit.Normal)
             if ok and name:
+                self.set_busy_cursor()
                 self.cloudqube.create_signature(
                     hiperqube_id, name, pixels, self.signature_created, self.show_error)
         except Exception as err:

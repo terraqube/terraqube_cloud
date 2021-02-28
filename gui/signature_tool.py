@@ -1,3 +1,4 @@
+from enum import Enum
 from qgis.core import QgsMessageLog, Qgis, QgsPointXY
 from qgis.PyQt.QtCore import Qt
 from qgis.gui import QgsMapTool, QgsRubberBand
@@ -20,11 +21,11 @@ class SignatureTool(QgsMapTool):
         self._layer = layer
         self._callback = callback
         self._pixels = []
-        self._is_dragging = False
         self._start_point = None
-        self._rubberBand = QgsRubberBand(self._canvas)
-        self._rubberBand.setColor(Qt.red)
-        self._rubberBand.setWidth(1)
+        self._mode = Mode.NONE
+        self._rubber_band = QgsRubberBand(self._canvas)
+        self._rubber_band.setColor(Qt.red)
+        self._rubber_band.setWidth(1)
         self.parent().setCursor(Qt.CrossCursor)
 
     def getPoint(self, pos):
@@ -51,51 +52,68 @@ class SignatureTool(QgsMapTool):
             return None        
 
     def keyReleaseEvent(self, event):
-        QgsMessageLog.logMessage("Key Release")
         if event.key() == Qt.Key_Escape:
             self._pixels = []
-            self._rubberBand.reset()
+            self.finish()
 
     def canvasMoveEvent(self, event):
-        if self._is_dragging:
-            point = self.getPoint(event.pos())
+        point = self.getPoint(event.pos())
+        if self._mode is Mode.SQUARE:
             if not point.compare(self._start_point):
-                QgsMessageLog.logMessage("{0} {1} {2} {3}".format(self._start_point.x(), self._start_point.y(), point.x(), point.y()))
-                self._rubberBand.reset()
-                self._rubberBand.addPoint(self._start_point, False)
-                self._rubberBand.addPoint(QgsPointXY(self._start_point.x(), point.y()), False)
-                self._rubberBand.addPoint(point, False)
-                self._rubberBand.addPoint(QgsPointXY(point.x(), self._start_point.y()), False)
-                self._pixels = []
-                for i in range(self._rubberBand.size()):
-                    self._pixels.append(self.getRowCol(self._rubberBand.getPoint(0, i)))
-                self._rubberBand.closePoints()
+                self._rubber_band.reset()
+                self._rubber_band.addPoint(self._start_point, False)
+                self._rubber_band.addPoint(QgsPointXY(self._start_point.x(), point.y()), False)
+                self._rubber_band.addPoint(point, False)
+                self._rubber_band.addPoint(QgsPointXY(point.x(), self._start_point.y()), False)
+                self._rubber_band.closePoints()
+        elif self._mode is Mode.POLYGON:
+            self._rubber_band.movePoint(self._rubber_band.numberOfVertices() - 1, point)
 
     def canvasReleaseEvent(self, event):
         if event.button() == Qt.LeftButton:
-            if self._is_dragging:
-                point = self.getPoint(event.pos())
-                if not self._start_point.compare(point):
+            point = self.getPoint(event.pos())
+            if self._mode is Mode.SQUARE:
+                if self._start_point.compare(point):
+                    self._mode = Mode.POLYGON
+                    self._rubber_band.addPoint(point)
+                    self._start_point = None
+                else:
+                    self._pixels = []
+                    # The last vertex is repeated
+                    for i in range(self._rubber_band.numberOfVertices() - 1):
+                        self._pixels.append(self.getRowCol(self._rubber_band.getPoint(0, i)))
                     self.finish()
-                self._is_dragging = False
-                self._start_point = None
+            elif self._mode is Mode.POLYGON:
+                self._rubber_band.addPoint(point)
 
     def canvasPressEvent(self, event):
         if event.button() == Qt.LeftButton:
             point = self.getPoint(event.pos())
-            if self._rubberBand.size() == 0:
-                self._is_dragging = True
-                self._start_point = QgsPointXY(point.x(), point.y())
-            self._rubberBand.addPoint(point)
             pixel = self.getRowCol(point)
+            if self._mode is Mode.NONE:
+                self._mode = Mode.SQUARE
+                self._start_point = QgsPointXY(point.x(), point.y())
+            elif self._mode is Mode.POLYGON:
+                self._rubber_band.removePoint(self._rubber_band.numberOfVertices() - 1)
+            else:
+                self._mode = Mode.POLYGON
             if pixel:
+                self._rubber_band.addPoint(point)
                 self._pixels.append(pixel)
         elif event.button() == Qt.RightButton:
             self.finish()
 
     def finish(self):
+        self._canvas.unsetMapTool(self)
+        self._rubber_band.reset()
+        self._mode = Mode.NONE
+        self._start_point = None
         if len(self._pixels) > 0:
-            self._canvas.unsetMapTool(self)
-            self._rubberBand.reset()
+            QgsMessageLog.logMessage("Pixels = {0}".format(self._pixels))
             self._callback(self._layer.hiperqube_id(), self._pixels)
-        
+
+
+class Mode(Enum):
+    NONE = 0
+    SQUARE = 1
+    POLYGON = 2
