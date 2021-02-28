@@ -109,7 +109,6 @@ class SignatureTool(QgsMapTool):
         self._mode = Mode.NONE
         self._start_point = None
         if len(self._pixels) > 0:
-            QgsMessageLog.logMessage("Pixels = {0}".format(self._pixels))
             self._callback(self._layer.hiperqube_id(), self._pixels)
 
 

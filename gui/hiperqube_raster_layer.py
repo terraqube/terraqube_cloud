@@ -1,6 +1,6 @@
-from qgis.PyQt.QtCore import QPoint
+from qgis.PyQt.QtCore import QPoint, Qt
 from qgis.core import QgsRasterLayer, QgsProject, QgsPointXY
-from qgis.gui import QgsVertexMarker
+from qgis.gui import QgsVertexMarker, QgsRubberBand
 from .signature_canvas_item import SignatureCanvasItem
 
 MARKERS_KEY = 'markers'
@@ -30,6 +30,9 @@ class HiperqubeRasterLayer(QgsRasterLayer):
 
     def build_markers(self, signature):
         markers = []
+        rb = QgsRubberBand(self._canvas)
+        rb.setColor(Qt.red)
+        rb.setWidth(1)
         max_col = 0
         max_line = 0
         for point in signature['points']:
@@ -41,6 +44,9 @@ class HiperqubeRasterLayer(QgsRasterLayer):
                 max_line = line
             
             markers.append(self.build_marker(col, line))
+            rb.addPoint(QgsPointXY(col, -line))
+        rb.closePoints()
+        markers.append(rb)
         return (markers, QgsPointXY(max_col, -max_line))
 
     def add_signature(self, signature, error, visibility=True):
@@ -59,6 +65,7 @@ class HiperqubeRasterLayer(QgsRasterLayer):
                 for m in markers:
                     m.hide()
                 i.hide()
+            i.updateCanvas()
 
         self._terraqube_cloud.download_file(
             signature['url'],
