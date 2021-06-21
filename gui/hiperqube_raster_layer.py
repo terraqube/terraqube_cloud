@@ -67,10 +67,11 @@ class HiperqubeRasterLayer(QgsRasterLayer):
                 i.hide()
             i.updateCanvas()
 
-        self._terraqube_cloud.download_file(
-            signature['url'],
-            signature_downloaded,
-            error)
+        if 'url' in signature and signature['url']:
+            self._terraqube_cloud.download_file(
+                signature['url'],
+                signature_downloaded,
+                error)
 
     def remove_signature(self, signature):
         try:
