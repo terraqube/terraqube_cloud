@@ -293,10 +293,23 @@ class CloudqubeClient:
         self.get(
             "hiperqubes/{0}/signatures".format(hiperqube_id), callback, error)
 
+    def get_signature(self, signature_id, callback, error):
+        """Gets a signatures by id."""
+        self.get(
+            "signatures/{0}".format(signature_id), callback, error)
+
     def delete_signature(self, signature_id, callback, error):
         """Deletes a signature."""
         self.delete_nam(
             "signatures/{0}".format(signature_id),
+            callback,
+            error)
+        
+    def post_signature_chart(self, signature_ids, callback, error):
+        """Creates a chart from an array of signature_ids."""
+        self.post_json(
+            'signatures/chart',
+            signature_ids,
             callback,
             error)
 

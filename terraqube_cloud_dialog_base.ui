@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>1301</width>
-    <height>727</height>
+    <width>1144</width>
+    <height>716</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -476,7 +476,7 @@
                   <set>QAbstractItemView::NoEditTriggers</set>
                  </property>
                  <property name="selectionMode">
-                  <enum>QAbstractItemView::SingleSelection</enum>
+                  <enum>QAbstractItemView::MultiSelection</enum>
                  </property>
                  <property name="selectionBehavior">
                   <enum>QAbstractItemView::SelectRows</enum>
@@ -502,6 +502,23 @@
                    <property name="icon">
                     <iconset resource="resources.qrc">
                      <normaloff>:/plugins/terraqube_cloud/img/crosshairs.svg</normaloff>:/plugins/terraqube_cloud/img/crosshairs.svg</iconset>
+                   </property>
+                  </widget>
+                 </item>
+                 <item>
+                  <widget class="QToolButton" name="refreshSignaturesButton">
+                   <property name="enabled">
+                    <bool>false</bool>
+                   </property>
+                   <property name="toolTip">
+                    <string>Refresh signature list</string>
+                   </property>
+                   <property name="text">
+                    <string>...</string>
+                   </property>
+                   <property name="icon">
+                    <iconset resource="resources.qrc">
+                     <normaloff>:/plugins/terraqube_cloud/img/sync-alt.svg</normaloff>:/plugins/terraqube_cloud/img/sync-alt.svg</iconset>
                    </property>
                   </widget>
                  </item>

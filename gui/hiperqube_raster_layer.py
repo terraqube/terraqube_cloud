@@ -67,10 +67,11 @@ class HiperqubeRasterLayer(QgsRasterLayer):
                 i.hide()
             i.updateCanvas()
 
-        self._terraqube_cloud.download_file(
-            signature['url'],
-            signature_downloaded,
-            error)
+        if 'url' in signature and signature['url']:
+            self._terraqube_cloud.download_file(
+                signature['url'],
+                signature_downloaded,
+                error)
 
     def remove_signature(self, signature):
         try:
@@ -88,7 +89,8 @@ class HiperqubeRasterLayer(QgsRasterLayer):
 
     def set_signature_visibility(self, signature, visibility, error):
         s = self.find_signature(signature['id'])
-        if s:
+        if s and 'url' in s:
+            # If it exists and has a url
             for m in s[MARKERS_KEY]:
                 # Can't use setVisibility given that QgsVertexMarker
                 # do not have that method
@@ -97,6 +99,10 @@ class HiperqubeRasterLayer(QgsRasterLayer):
                 else:
                     m.hide()
         else:
+            if s:
+                # It has to be removed so that the old markers disappear
+                self.remove_signature(s)
+            # If it doesn't exist or it didn't have a url
             self.add_signature(signature, error, visibility)
     
     def remove_markers(self, signature):
