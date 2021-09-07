@@ -31,9 +31,7 @@ from qgis.PyQt.QtGui import QIcon, QPixmap, QImage, QPainter, QColor
 from qgis.PyQt.QtWidgets import (
     QAction, QTableWidgetItem, QHeaderView, QPushButton, QDialogButtonBox,
     QDialog, QApplication, QMessageBox, QInputDialog, QLineEdit, QFileDialog)
-from qgis.PyQt.QtSvg import QSvgRenderer
-from qgis.core import QgsProject
-from qgis.gui import QgsVertexMarker
+from qgis.core import QgsProject, QgsMessageLog
 
 # Initialize Qt resources from file resources.py
 from .resources import *
@@ -265,7 +263,7 @@ class TerraqubeCloud:
         """Shows the network error receivd."""
         self.iface.messageBar().pushCritical(
             "Failure",
-            "Error making request to Terraqube Cloud: [{0}] - ".format(error, error_str))
+            "Error making request to Terraqube Cloud: [{0}] - {1}".format(error, error_str))
         self.restore_cursor()
 
     def download_file(self, uri, callback, error):
@@ -351,17 +349,53 @@ class TerraqubeCloud:
 
         self.show_hiperqube(callback=callback)
 
+    def download_csv(self, destination):
+        """Downloads the signature values into a CSV file."""
+        def values_downloaded(signature):
+            if 'values' in signature:
+                values = signature['values']
+                hiperqube_details = self.hiperqube_details
+                wave_lengths = hiperqube_details['wavelength']
+                if hiperqube_details:
+                    with open(destination, 'wt') as f:
+                        f.write('"Wavelength","Reflectance"\n')
+                        for i in range(len(values)):
+                            f.write('"{0}","{1}"\n'.format(wave_lengths[i], values[i]))
+                else:
+                    self.show_error('Error', 'Error accessing wavelengths')
+            else:
+                self.show_error('Error', 'Error downloading signature')
+
+        if destination:
+            self.cloudqube.get_signature(self.signature['id'], values_downloaded, self.show_error)
+        
+
     def download_signature(self):
         """Asks for file to save and saves the signature accordingly."""
         def signature_downloaded(filename):
             if not QFile.copy(filename, destination):
                 self.show_error('Error writing to file [{0}]. Check that the file does not exist already.'.format(destination))
+                
+        def signatures_chart_posted(signature_chart):
+            self.download_file(signature_chart['url'], signature_downloaded, self.show_error)
 
-        if self.signature:
-            destination = QFileDialog.getSaveFileName(self.dlg, 'Save signature', filter='Signature (*.svg)')[0]
-            if destination:
+        indexes = self.dlg.signaturesTable.selectedIndexes()
+        if len(indexes) == 1 and self.signature:
+            destination, filter = QFileDialog.getSaveFileName(self.dlg, 'Save signature', filter='Chart (*.svg);;Values (*.csv)')
+            if filter == 'Chart (*.svg)':
                 self.download_file(self.signature['url'], signature_downloaded, self.show_error)
-
+            else:
+                if filter == 'Values (*.csv)' and destination:
+                    self.download_csv(destination)
+        else:
+            if len(indexes) > 1:
+                destination, _ = QFileDialog.getSaveFileName(self.dlg, 'Save signature', filter='Chart (*.svg)')
+                if destination:
+                    signatures = []
+                    for i in range(len(indexes)):
+                        signature = self.signatures[indexes[i].row()]
+                        signatures.append(signature['id'])
+                    self.cloudqube.post_signature_chart(signatures, signatures_chart_posted, self.show_error)
 
     def signature_deleted(self):
         """Executed after a signature is deleted."""
@@ -608,6 +642,7 @@ class TerraqubeCloud:
                 self.signature_cell_changed)
         self.dlg.signaturesTable.setEnabled(True)
         self.dlg.createSignatureButton.setEnabled(True)
+        self.dlg.refreshSignaturesButton.setEnabled(True)
         self.restore_cursor()
 
     def clear_hiperqube_details(self):
@@ -630,6 +665,7 @@ class TerraqubeCloud:
         self.dlg.signaturesTable.setRowCount(0)
         self.dlg.signaturesTable.setEnabled(False)
         self.dlg.createSignatureButton.setEnabled(False)
+        self.dlg.refreshSignaturesButton.setEnabled(False)
         self.dlg.downloadSignatureButton.setEnabled(False)
         self.dlg.deleteSignatureButton.setEnabled(False)
 
@@ -670,18 +706,22 @@ class TerraqubeCloud:
                 self.dlg.showHiperqubeButton.setEnabled(False)
                 self.dlg.deleteHiperqubeButton.setEnabled(False)
 
-    def select_signature(self, current, previous):
+    def select_signature(self):
         """Action to execute when a signature is selected."""
-        if current != previous:
-            row = self.dlg.signaturesTable.currentRow()
-            if row >= 0:
-                self.signature = self.signatures[row]
-                self.dlg.downloadSignatureButton.setEnabled(True)
-                self.dlg.deleteSignatureButton.setEnabled(True)
-            else:
-                self.signature = None
-                self.dlg.downloadSignatureButton.setEnabled(False)
-                self.dlg.deleteSignatureButton.setEnabled(False)
+        indexes = self.dlg.signaturesTable.selectedIndexes()
+        if len(indexes) == 0:
+            self.signature = None
+            self.dlg.downloadSignatureButton.setEnabled(False)
+            self.dlg.deleteSignatureButton.setEnabled(False)
+        elif len(indexes) == 1:
+            self.signature = self.signatures[indexes[0].row()]
+            self.dlg.downloadSignatureButton.setEnabled(True)
+            self.dlg.deleteSignatureButton.setEnabled(True)
+        elif len(indexes) > 1:
+            self.signature = self.signatures[indexes[0].row()]
+            self.dlg.downloadSignatureButton.setEnabled(True)
+            self.dlg.deleteSignatureButton.setEnabled(False)
+            
 
     def select_project(self, index):
         """Action to execute when a project is selected."""
@@ -980,9 +1020,10 @@ class TerraqubeCloud:
         headers = ['Signature']
         self.dlg.signaturesTable.setColumnCount(len(headers))
         self.dlg.signaturesTable.setHorizontalHeaderLabels(headers)
-        self.dlg.signaturesTable.currentItemChanged.connect(
+        self.dlg.signaturesTable.itemSelectionChanged.connect(
             self.select_signature)
         self.dlg.createSignatureButton.clicked.connect(self.create_signature)
+        self.dlg.refreshSignaturesButton.clicked.connect(self.refresh_signatures)
         self.dlg.downloadSignatureButton.clicked.connect(
             self.download_signature)
         self.dlg.deleteSignatureButton.clicked.connect(self.delete_signature)

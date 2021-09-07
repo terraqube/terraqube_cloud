@@ -6,10 +6,7 @@ class SignatureTableWidgetItem(QTableWidgetItem):
     def __init__(self, signature, state, callback):
         QTableWidgetItem.__init__(self, signature['name'])
         self.setCheckState(state)
-        if ('url' in signature and signature['url']):
-            self.setFlags(self.flags() | Qt.ItemIsEnabled)
-        else:
-            self.setFlags(self.flags() & ~Qt.ItemIsEnabled)
+        if not ('url' in signature and signature['url']):
             self.setText("{0} (generating...)".format(signature['name']))
         self._signature = signature
         self._callback = callback
